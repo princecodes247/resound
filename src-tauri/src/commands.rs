@@ -40,7 +40,7 @@ pub fn list_audio_devices() -> Result<Vec<AudioDevice>, String> {
 
 
 #[tauri::command]
-pub async fn start_host(session_id: String, device_name: Option<String>) -> Result<u16, String> {
+pub async fn start_host(session_id: String, device_name: Option<String>, monitor: Option<bool>) -> Result<u16, String> {
   // Keep session id stable for this app instance.
   {
     let mut guard = STARTED_SESSION_ID.lock().unwrap();
@@ -54,9 +54,8 @@ pub async fn start_host(session_id: String, device_name: Option<String>) -> Resu
     }
   }
 
-  // 1) Start native audio capture if a device is provided (or use default)
   let wrapped_stream = {
-    let stream = super::start_native_audio_capture(device_name)?;
+    let stream = super::start_native_audio_capture(device_name, monitor.unwrap_or(false))?;
     AudioStream(stream)
   };
   SIGNALING_STATE.write().await.audio_stream = Some(wrapped_stream);

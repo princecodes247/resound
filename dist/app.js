@@ -105,14 +105,19 @@ async function startHost() {
   hostLogEl.textContent = "";
 
   const deviceName = $("deviceSelect").value || null;
+  const monitor = $("monitorCheckbox").checked;
 
   // 1) Start signaling + mDNS + Native Capture (Rust)
-  log(hostLogEl, `Starting host with device=${deviceName || "default"}...`);
+  log(
+    hostLogEl,
+    `Starting host with device=${deviceName || "default"} monitor=${monitor}...`,
+  );
   const port = await invoke("start_host", {
     session_id: host.sessionId,
     sessionId: host.sessionId,
     device_name: deviceName,
     deviceName: deviceName,
+    monitor: monitor,
   });
   host.signalingPort = port;
   $("hostStatus").textContent =

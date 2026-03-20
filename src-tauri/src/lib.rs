@@ -1,6 +1,6 @@
 use std::{
-  collections::HashMap,
-  sync::{LazyLock, Mutex},
+  collections::{HashMap, VecDeque},
+  sync::{Arc, LazyLock, Mutex},
 };
 
 use axum::extract::{
@@ -40,7 +40,7 @@ struct ReceiverConn {
   tx: tokio::sync::mpsc::UnboundedSender<WsMessage>,
 }
 
-pub(crate) struct AudioStream(#[allow(dead_code)] pub(crate) cpal::Stream);
+pub(crate) struct AudioStream(#[allow(dead_code)] pub(crate) Vec<cpal::Stream>);
 
 // Safety: cpal::Stream is Send/Sync on most platforms.
 unsafe impl Send for AudioStream {}
@@ -70,7 +70,7 @@ pub async fn broadcast_audio_packet(packet: Vec<u8>) {
   }
 }
 
-pub fn start_native_audio_capture(device_name: Option<String>) -> Result<cpal::Stream, String> {
+pub fn start_native_audio_capture(device_name: Option<String>, monitor: bool) -> Result<Vec<cpal::Stream>, String> {
   use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
   let host = cpal::default_host();
   let device = if let Some(name) = device_name {
@@ -83,16 +83,23 @@ pub fn start_native_audio_capture(device_name: Option<String>) -> Result<cpal::S
   };
 
   let config = device.default_input_config().map_err(|e| e.to_string())?;
-  let _sample_rate = config.sample_rate().0;
   let channels = config.channels();
 
   let handle = tokio::runtime::Handle::current();
+  
+  // For local monitoring
+  let monitor_buffer = if monitor {
+      Some(Arc::new(Mutex::new(VecDeque::<f32>::with_capacity(8192))))
+  } else {
+      None
+  };
 
-  let stream = device.build_input_stream(
+  let input_monitor_buffer = monitor_buffer.clone();
+  
+  let input_stream = device.build_input_stream(
     &config.into(),
     move |data: &[f32], _: &cpal::InputCallbackInfo| {
-      // Send raw f32 samples as binary. 
-      // To save bandwidth, we only send the first channel (mono).
+      // 1) Forward to receivers
       let mut pcm = Vec::with_capacity(data.len() / channels as usize * 4);
       for chunk in data.chunks(channels as usize) {
         let sample = chunk[0];
@@ -103,15 +110,56 @@ pub fn start_native_audio_capture(device_name: Option<String>) -> Result<cpal::S
       handle.spawn(async move {
         broadcast_audio_packet(packet).await;
       });
+
+      // 2) Forward to local monitor buffer if enabled
+      if let Some(ref buf_arc) = input_monitor_buffer {
+          if let Ok(mut buf) = buf_arc.lock() {
+              // Only push first channel to simplify monitoring (mono)
+              for chunk in data.chunks(channels as usize) {
+                  buf.push_back(chunk[0]);
+              }
+              // Prevent buffer from growing indefinitely if output is slow
+              if buf.len() > 16384 {
+                  let to_remove = buf.len() - 16384;
+                  buf.drain(0..to_remove);
+              }
+          }
+      }
     },
-    |err| log::error!("Audio stream error: {err}"),
+    |err| log::error!("Audio input stream error: {err}"),
     None,
   ).map_err(|e| e.to_string())?;
 
+  let mut streams = vec![input_stream];
 
+  if monitor {
+      let output_device = host.default_output_device().ok_or("No default output device found for monitoring")?;
+      let output_config = output_device.default_output_config().map_err(|e| e.to_string())?;
+      let output_channels = output_config.channels();
+      let output_monitor_buffer = monitor_buffer.unwrap();
 
-  stream.play().map_err(|e| e.to_string())?;
-  Ok(stream)
+      let output_stream = output_device.build_output_stream(
+          &output_config.into(),
+          move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+              if let Ok(mut buf) = output_monitor_buffer.lock() {
+                  for frame in data.chunks_mut(output_channels as usize) {
+                      let sample = buf.pop_front().unwrap_or(0.0);
+                      for s in frame.iter_mut() {
+                          *s = sample;
+                      }
+                  }
+              }
+          },
+          |err| log::error!("Audio output stream error: {err}"),
+          None,
+      ).map_err(|e| e.to_string())?;
+      
+      output_stream.play().map_err(|e| e.to_string())?;
+      streams.push(output_stream);
+  }
+
+  streams[0].play().map_err(|e| e.to_string())?;
+  Ok(streams)
 }
 async fn websocket_handler(ws: WebSocketUpgrade) -> impl axum::response::IntoResponse {
   ws.on_upgrade(move |socket| async move {

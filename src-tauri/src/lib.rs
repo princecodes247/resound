@@ -61,6 +61,7 @@ fn receiver_key(session_id: &str, receiver_id: &str) -> String {
 pub(crate) static SIGNALING_STATE: LazyLock<RwLock<RoutingState>> = LazyLock::new(|| RwLock::new(RoutingState::default()));
 pub(crate) static STARTED_SESSION_ID: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 pub(crate) static MDNS_DAEMON: LazyLock<Mutex<Option<ServiceDaemon>>> = LazyLock::new(|| Mutex::new(None));
+pub(crate) static SERVER_SHUTDOWN: LazyLock<Mutex<Option<tokio::sync::oneshot::Sender<()>>>> = LazyLock::new(|| Mutex::new(None));
 
 
 pub async fn broadcast_audio_packet(packet: Vec<u8>) {
@@ -271,6 +272,7 @@ pub fn run() {
   tauri::Builder::default()
     .invoke_handler(tauri::generate_handler![
       commands::start_host,
+      commands::stop_host,
       commands::discover_hosts,
       commands::list_audio_devices
     ])

@@ -124,6 +124,10 @@ async function startHost() {
     `Signaling on port ${port}. Streaming native audio...`;
   log(hostLogEl, `mDNS+WS+Capture started. Port=${port}`);
 
+  $("btnStartHost").style.display = "none";
+  $("btnStopHost").style.display = "inline-block";
+  $("btnStopHost").disabled = false;
+
   // 3) Connect to local signaling server as "host"
 
   const wsUrl = `ws://127.0.0.1:${host.signalingPort}/ws`;
@@ -230,6 +234,32 @@ async function startHost() {
   };
 
   host.ws.onclose = () => log(hostLogEl, "WebSocket closed.");
+}
+
+async function stopHost() {
+  log(hostLogEl, "Stopping host...");
+  try {
+    await invoke("stop_host", {});
+    if (host.ws) {
+      host.ws.close();
+      host.ws = null;
+    }
+    host.sessionId = null;
+    host.clientId = null;
+    host.signalingPort = null;
+
+    $("hostSessionId").textContent = "not started";
+    $("hostStatus").textContent = "Idle";
+    log(hostLogEl, "Host stopped successfully.");
+
+    $("btnStartHost").style.display = "inline-block";
+    $("btnStartHost").disabled = false;
+    $("btnStopHost").style.display = "none";
+  } catch (e) {
+    console.error("Stop error:", e);
+    log(hostLogEl, `ERROR stopping host: ${e?.message ?? String(e)}`);
+    $("btnStopHost").disabled = false;
+  }
 }
 
 // ---------- Receiver state ----------
@@ -407,7 +437,14 @@ $("btnStartHost").addEventListener("click", async () => {
     $("hostStatus").textContent = `Host error: ${e?.message ?? String(e)}`;
     log(hostLogEl, `ERROR: ${e?.message ?? String(e)}`);
     $("btnStartHost").disabled = false;
+    $("btnStartHost").style.display = "inline-block";
+    $("btnStopHost").style.display = "none";
   }
+});
+
+$("btnStopHost").addEventListener("click", async () => {
+  $("btnStopHost").disabled = true;
+  await stopHost();
 });
 
 $("btnDiscover").addEventListener("click", async () => {

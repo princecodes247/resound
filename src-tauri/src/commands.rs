@@ -10,7 +10,7 @@ use tokio::net::TcpListener;
 
 use serde::Serialize;
 use cpal::traits::{DeviceTrait, HostTrait};
-use super::{AudioStream, DiscoveredHost, MDNS_DAEMON, SERVICE_TYPE, SIGNALING_STATE, STARTED_SESSION_ID, WS_PATH, websocket_handler};
+use super::{AudioStream, DiscoveredHost, MDNS_DAEMON, SERVICE_TYPE, SIGNALING_STATE, STARTED_SESSION_ID, SERVER_SHUTDOWN, WS_PATH, websocket_handler};
 
 const WS_SCHEME_PORT_FALLBACK: u16 = 0;
 
@@ -67,9 +67,15 @@ pub async fn start_host(session_id: String, device_name: Option<String>, monitor
     .map_err(|e| format!("Failed to bind websocket port: {e}"))?;
   let signaling_port = listener.local_addr().map_err(|e| e.to_string())?.port();
 
+  let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+  *SERVER_SHUTDOWN.lock().unwrap() = Some(tx);
+
   tokio::spawn(async move {
     let app = Router::new().route(WS_PATH, get(websocket_handler));
-    if let Err(e) = axum::serve(listener, app).await {
+    let server = axum::serve(listener, app);
+    if let Err(e) = server.with_graceful_shutdown(async {
+      rx.await.ok();
+    }).await {
       log::error!("WebSocket server error: {e}");
     }
   });
@@ -177,5 +183,30 @@ pub async fn discover_hosts(duration_ms: u64) -> Result<Vec<DiscoveredHost>, Str
   let mut out: Vec<DiscoveredHost> = by_session_id.into_values().collect();
   out.sort_by(|a, b| a.name.cmp(&b.name));
   Ok(out)
+}
+
+#[tauri::command]
+pub async fn stop_host() -> Result<(), String> {
+  // 1) Shutdown websocket server
+  if let Some(tx) = SERVER_SHUTDOWN.lock().unwrap().take() {
+    let _ = tx.send(());
+  }
+
+  // 2) Stop mDNS
+  *MDNS_DAEMON.lock().unwrap() = None;
+
+  // 3) Stop audio capture
+  {
+    let mut state = SIGNALING_STATE.write().await;
+    state.audio_stream = None;
+    state.hosts.clear();
+    state.receivers.clear();
+  }
+
+  // 4) Reset session ID
+  *STARTED_SESSION_ID.lock().unwrap() = None;
+
+  log::info!("Host stopped and cleaned up.");
+  Ok(())
 }
 

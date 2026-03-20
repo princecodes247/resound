@@ -61,10 +61,16 @@ async function captureHostAudioStream() {
 
   // Preferred path for system audio on macOS via screen/audio capture.
   if (typeof mediaDevices.getDisplayMedia === "function") {
-    return await mediaDevices.getDisplayMedia({
-      video: false,
+    const stream = await mediaDevices.getDisplayMedia({
+      // WebKit typically requires a video constraint for getDisplayMedia.
+      video: true,
       audio: true,
     });
+    // We only need audio for LAN playback.
+    for (const track of stream.getVideoTracks()) {
+      track.enabled = false;
+    }
+    return stream;
   }
 
   // Fallback path if display capture is not available in this WebView runtime.
@@ -77,6 +83,26 @@ async function captureHostAudioStream() {
   }
 
   throw new Error("No supported media capture API found (getDisplayMedia/getUserMedia).");
+}
+
+async function fallbackToMicrophoneIfNeeded(stream) {
+  if (stream?.getAudioTracks?.().length) return stream;
+
+  const mediaDevices = navigator.mediaDevices;
+  if (!mediaDevices || typeof mediaDevices.getUserMedia !== "function") {
+    return stream;
+  }
+
+  const micStream = await mediaDevices.getUserMedia({
+    audio: true,
+    video: false,
+  });
+
+  if (!micStream.getAudioTracks().length) {
+    return stream;
+  }
+
+  return micStream;
 }
 
 async function startHost() {
@@ -102,9 +128,12 @@ async function startHost() {
   $("hostStatus").textContent = "Requesting audio capture permissions...";
   log(hostLogEl, "Requesting capture stream...");
   host.stream = await captureHostAudioStream();
+  host.stream = await fallbackToMicrophoneIfNeeded(host.stream);
   const audioTracks = host.stream.getAudioTracks();
   if (!audioTracks.length) {
-    throw new Error("No audio track returned from media capture.");
+    throw new Error(
+      "No audio track returned from screen share, and microphone fallback also failed.",
+    );
   }
   host.audioTrack = audioTracks[0];
   $("hostStatus").textContent = "Audio capture ready. Connecting signaling...";

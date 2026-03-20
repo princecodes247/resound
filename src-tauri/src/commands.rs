@@ -8,6 +8,7 @@ use axum::{routing::get, Router};
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 use tokio::net::TcpListener;
 
+use serde::Serialize;
 use cpal::traits::{DeviceTrait, HostTrait};
 use super::{AudioStream, DiscoveredHost, MDNS_DAEMON, SERVICE_TYPE, SIGNALING_STATE, STARTED_SESSION_ID, WS_PATH, websocket_handler};
 

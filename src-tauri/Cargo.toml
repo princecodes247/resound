@@ -38,3 +38,8 @@ time = "=0.3.45"
 tokio = { version = "1.36.0", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
 axum = { version = "0.7.9", features = ["ws"] }
 futures-util = "0.3.32"
+
+# Audio capture
+cpal = "0.15"
+
+

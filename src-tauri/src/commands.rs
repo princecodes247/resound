@@ -13,7 +13,19 @@ use super::{DiscoveredHost, MDNS_DAEMON, SERVICE_TYPE, STARTED_SESSION_ID, WS_PA
 const WS_SCHEME_PORT_FALLBACK: u16 = 0;
 
 #[tauri::command]
-pub async fn start_host(session_id: String) -> Result<u16, String> {
+pub fn list_audio_devices() -> Result<Vec<String>, String> {
+  use cpal::traits::HostTrait;
+  let host = cpal::default_host();
+  let devices = host.input_devices().map_err(|e| e.to_string())?;
+  let names = devices
+    .into_iter()
+    .filter_map(|d| d.name().ok())
+    .collect();
+  Ok(names)
+}
+
+#[tauri::command]
+pub async fn start_host(session_id: String, device_name: Option<String>) -> Result<u16, String> {
   // Keep session id stable for this app instance.
   {
     let mut guard = STARTED_SESSION_ID.lock().unwrap();
@@ -27,7 +39,11 @@ pub async fn start_host(session_id: String) -> Result<u16, String> {
     }
   }
 
-  // 1) Start websocket signaling server (random port) and return the chosen port.
+  // 1) Start native audio capture if a device is provided (or use default)
+  let stream = super::start_native_audio_capture(device_name)?;
+  SIGNALING_STATE.write().await.audio_stream = Some(stream);
+
+  // 2) Start websocket signaling server (random port) and return the chosen port.
   let listener = TcpListener::bind(("0.0.0.0", 0))
     .await
     .map_err(|e| format!("Failed to bind websocket port: {e}"))?;
@@ -40,7 +56,8 @@ pub async fn start_host(session_id: String) -> Result<u16, String> {
     }
   });
 
-  // 2) Start mDNS responder advertising this session id.
+  // 3) Start mDNS responder advertising this session id.
+
   let ip = local_ip_address::local_ip().map_err(|e| format!("Failed to get local IP: {e}"))?;
   let ip_v4: Option<IpAddr> = match ip {
     IpAddr::V4(_) => Some(ip),

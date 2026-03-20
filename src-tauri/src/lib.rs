@@ -46,12 +46,16 @@ struct ReceiverConn {
   tx: tokio::sync::mpsc::UnboundedSender<WsMessage>,
 }
 
-#[derive(Debug, Default)]
+struct AudioStream(cpal::Stream);
+// Safety: cpal::Stream is Send/Sync on most platforms.
+unsafe impl Send for AudioStream {}
+unsafe impl Sync for AudioStream {}
+
+#[derive(Default)]
 struct RoutingState {
-  // session_id -> host connection
   hosts: HashMap<String, HostConn>,
-  // (session_id:receiver_id) -> receiver connection
   receivers: HashMap<String, ReceiverConn>,
+  audio_stream: Option<cpal::Stream>,
 }
 
 fn receiver_key(session_id: &str, receiver_id: &str) -> String {
@@ -62,146 +66,65 @@ static SIGNALING_STATE: LazyLock<RwLock<RoutingState>> = LazyLock::new(|| RwLock
 static STARTED_SESSION_ID: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 static MDNS_DAEMON: LazyLock<Mutex<Option<ServiceDaemon>>> = LazyLock::new(|| Mutex::new(None));
 
-async fn websocket_handler(ws: WebSocketUpgrade) -> impl axum::response::IntoResponse {
-  ws.on_upgrade(move |socket| async move {
-    handle_ws_socket(socket).await;
-  })
+pub async fn broadcast_audio_packet(packet: Vec<u8>) {
+  let state = SIGNALING_STATE.read().await;
+  for receiver in state.receivers.values() {
+    let _ = receiver.tx.send(WsMessage::Binary(packet.clone()));
+  }
 }
 
-async fn handle_ws_socket(socket: WebSocket) {
-  let (mut sender, mut receiver) = socket.split();
-  let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<WsMessage>();
+pub fn start_native_audio_capture(device_name: Option<String>) -> Result<cpal::Stream, String> {
+  use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+  let host = cpal::default_host();
+  let device = if let Some(name) = device_name {
+    host.input_devices()
+      .map_err(|e| e.to_string())?
+      .find(|d| d.name().ok().as_deref() == Some(&name))
+      .ok_or_else(|| format!("Device not found: {name}"))?
+  } else {
+    host.default_input_device().ok_or("No default input device found")?
+  };
 
-  // writer task
-  tokio::spawn(async move {
-    while let Some(msg) = rx.recv().await {
-      if sender.send(msg).await.is_err() {
-        break;
+  let config = device.default_input_config().map_err(|e| e.to_string())?;
+  let sample_rate = config.sample_rate().0;
+  let channels = config.channels();
+
+  let config = device.default_input_config().map_err(|e| e.to_string())?;
+  let channels = config.channels();
+
+  let stream = device.build_input_stream(
+    &config.into(),
+    move |data: &[f32], _: &cpal::InputCallbackInfo| {
+      // Send raw f32 samples as binary. 
+      // To save bandwidth, we only send the first channel (mono).
+      let mut pcm = Vec::with_capacity(data.len() / channels as usize * 4);
+      for chunk in data.chunks(channels as usize) {
+        let sample = chunk[0];
+        pcm.extend_from_slice(&sample.to_le_bytes());
       }
-    }
-  });
+      
+      let packet = pcm;
+      tokio::spawn(async move {
+        broadcast_audio_packet(packet).await;
+      });
+    },
+    |err| log::error!("Audio stream error: {err}"),
+    None,
+  ).map_err(|e| e.to_string())?;
 
-  let mut my_role: Option<String> = None;
-  let mut my_session_id: Option<String> = None;
-  let mut my_client_id: Option<String> = None;
 
-  while let Some(Ok(msg)) = receiver.next().await {
-    let WsMessage::Text(text) = msg else { continue };
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else { continue };
-
-    let typ = value.get("type").and_then(|v| v.as_str()).unwrap_or_default();
-
-    if typ == "register" {
-      let session_id = value.get("sessionId").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-      let role = value.get("role").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-      let client_id = value.get("clientId").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-
-      my_role = Some(role.clone());
-      my_session_id = Some(session_id.clone());
-      my_client_id = Some(client_id.clone());
-
-      let mut state = SIGNALING_STATE.write().await;
-      if role == "host" {
-        state.hosts.insert(session_id, HostConn { client_id, tx: tx.clone() });
-      } else if role == "receiver" {
-        let key = receiver_key(&value["sessionId"].as_str().unwrap_or_default(), &client_id);
-        state.receivers.insert(key, ReceiverConn { client_id, tx: tx.clone() });
-      }
-
-      // No extra server reply for now.
-      continue;
-    }
-
-    match typ {
-      "offer" => {
-        // receiver -> host
-        let session_id = value.get("sessionId").and_then(|v| v.as_str()).unwrap_or_default();
-        let receiver_id = value.get("from").and_then(|v| v.as_str()).unwrap_or_default();
-        if session_id.is_empty() || receiver_id.is_empty() {
-          continue;
-        }
-
-        let state = SIGNALING_STATE.read().await;
-        let Some(host_conn) = state.hosts.get(session_id) else { continue };
-
-        let outgoing = serde_json::json!({
-          "type": "offer",
-          "sessionId": session_id,
-          "from": receiver_id,
-          "offer": value.get("offer"),
-        });
-        let _ = host_conn.tx.send(WsMessage::Text(outgoing.to_string()));
-      }
-      "answer" => {
-        // host -> receiver
-        let session_id = value.get("sessionId").and_then(|v| v.as_str()).unwrap_or_default();
-        let receiver_id = value.get("to").and_then(|v| v.as_str()).unwrap_or_default();
-        if session_id.is_empty() || receiver_id.is_empty() {
-          continue;
-        }
-
-        let state = SIGNALING_STATE.read().await;
-        let key = receiver_key(session_id, receiver_id);
-        let Some(receiver_conn) = state.receivers.get(&key) else { continue };
-
-        let outgoing = serde_json::json!({
-          "type": "answer",
-          "sessionId": session_id,
-          "to": receiver_id,
-          "answer": value.get("answer"),
-        });
-        let _ = receiver_conn.tx.send(WsMessage::Text(outgoing.to_string()));
-      }
-      "ice" => {
-        // ambiguous direction:
-        // - receiver->host contains `from`
-        // - host->receiver contains `to`
-        let session_id = value.get("sessionId").and_then(|v| v.as_str()).unwrap_or_default();
-
-        let maybe_to = value.get("to").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-        let maybe_from = value.get("from").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-
-        if !maybe_to.is_empty() {
-          let receiver_id = maybe_to;
-          let state = SIGNALING_STATE.read().await;
-          let key = receiver_key(session_id, &receiver_id);
-          let Some(receiver_conn) = state.receivers.get(&key) else { continue };
-
-          let outgoing = serde_json::json!({
-            "type": "ice",
-            "sessionId": session_id,
-            "to": receiver_id,
-            "candidate": value.get("candidate"),
-          });
-          let _ = receiver_conn.tx.send(WsMessage::Text(outgoing.to_string()));
-        } else if !maybe_from.is_empty() {
-          let receiver_id = maybe_from;
-          let state = SIGNALING_STATE.read().await;
-          let Some(host_conn) = state.hosts.get(session_id) else { continue };
-
-          let outgoing = serde_json::json!({
-            "type": "ice",
-            "sessionId": session_id,
-            "from": receiver_id,
-            "candidate": value.get("candidate"),
-          });
-          let _ = host_conn.tx.send(WsMessage::Text(outgoing.to_string()));
-        }
-      }
-      _ => {}
-    }
-  }
-
-  // Connection dropped; routing cleanup isn't strictly required for MVP.
-  // A future improvement would be to remove entries from `SIGNALING_STATE`.
-  let _ = (my_role, my_session_id, my_client_id);
-  let _ = tx;
+  stream.play().map_err(|e| e.to_string())?;
+  Ok(stream)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
-    .invoke_handler(tauri::generate_handler![commands::start_host, commands::discover_hosts])
+    .invoke_handler(tauri::generate_handler![
+      commands::start_host,
+      commands::discover_hosts,
+      commands::list_audio_devices
+    ])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -215,3 +138,4 @@ pub fn run() {
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
+

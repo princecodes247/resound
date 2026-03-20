@@ -46,45 +46,31 @@ let host = {
   clientId: null,
   signalingPort: null,
   ws: null,
-  stream: null,
-  audioTrack: null,
-  pcsByReceiverId: new Map(),
+  // Native capture handles are in Rust now.
 };
 
-async function captureHostAudioStream() {
-  const mediaDevices = navigator.mediaDevices;
-  if (!mediaDevices || typeof mediaDevices.getUserMedia !== "function") {
-    throw new Error(
-      "Media APIs unavailable in this WebView. Restart app after granting microphone/screen permissions to the app host (Cursor/Terminal) in macOS Privacy settings.",
-    );
-  }
+let audioCtx = null;
+let nextPlaybackTime = 0;
 
-  // DEBUG: Try microphone only to isolate system audio issues
-  return await mediaDevices.getUserMedia({
-    audio: true,
-    video: false,
-  });
+async function populateDevices() {
+  try {
+    const devices = await invoke("list_audio_devices", {});
+    const sel = $("deviceSelect");
+    sel.innerHTML = '<option value="">Default Input</option>';
+    devices.forEach((d) => {
+      const opt = document.createElement("option");
+      opt.value = d;
+      opt.textContent = d;
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    console.error("Failed to list devices:", e);
+  }
 }
 
-async function fallbackToMicrophoneIfNeeded(stream) {
-  if (stream?.getAudioTracks?.().length) return stream;
+populateDevices();
 
-  const mediaDevices = navigator.mediaDevices;
-  if (!mediaDevices || typeof mediaDevices.getUserMedia !== "function") {
-    return stream;
-  }
-
-  const micStream = await mediaDevices.getUserMedia({
-    audio: true,
-    video: false,
-  });
-
-  if (!micStream.getAudioTracks().length) {
-    return stream;
-  }
-
-  return micStream;
-}
+// ---------- Host state ----------
 
 async function startHost() {
   host.sessionId = crypto.randomUUID();
@@ -94,34 +80,23 @@ async function startHost() {
   $("hostStatus").textContent = "Starting host...";
   hostLogEl.textContent = "";
 
-  // 1) Start signaling + mDNS (Rust)
+  const deviceName = $("deviceSelect").value || null;
+
+  // 1) Start signaling + mDNS + Native Capture (Rust)
+  log(hostLogEl, `Starting host with device=${deviceName || "default"}...`);
   const port = await invoke("start_host", {
     session_id: host.sessionId,
     sessionId: host.sessionId,
+    device_name: deviceName,
+    deviceName: deviceName,
   });
   host.signalingPort = port;
   $("hostStatus").textContent =
-    `Signaling on port ${port}. Waiting for receiver(s)...`;
-  log(hostLogEl, `mDNS+WS started. Port=${port}`);
-
-  // 2) Capture system audio first (macOS permission prompt).
-  // Doing this before WS registration avoids a race where a receiver sends an offer
-  // before `host.audioTrack` is available.
-  $("hostStatus").textContent = "Requesting audio capture permissions...";
-  log(hostLogEl, "Requesting capture stream...");
-  host.stream = await captureHostAudioStream();
-  host.stream = await fallbackToMicrophoneIfNeeded(host.stream);
-  const audioTracks = host.stream.getAudioTracks();
-  if (!audioTracks.length) {
-    throw new Error(
-      "No audio track returned from screen share, and microphone fallback also failed.",
-    );
-  }
-  host.audioTrack = audioTracks[0];
-  $("hostStatus").textContent = "Audio capture ready. Connecting signaling...";
-  log(hostLogEl, "Audio capture ready.");
+    `Signaling on port ${port}. Streaming native audio...`;
+  log(hostLogEl, `mDNS+WS+Capture started. Port=${port}`);
 
   // 3) Connect to local signaling server as "host"
+
   const wsUrl = `ws://127.0.0.1:${host.signalingPort}/ws`;
   log(hostLogEl, `Connecting to WebSocket: ${wsUrl}`);
   host.ws = new WebSocket(wsUrl);
@@ -321,6 +296,25 @@ async function connectAndPlay() {
   };
 
   receiver.ws.onmessage = async (evt) => {
+    if (evt.data instanceof Blob) {
+      // Binary PCM data from Rust
+      const arrayBuffer = await evt.data.arrayBuffer();
+      if (!audioCtx) audioCtx = new AudioContext();
+      const floatData = new Float32Array(arrayBuffer);
+      if (floatData.length === 0) return;
+
+      const buffer = audioCtx.createBuffer(1, floatData.length, 44100);
+      buffer.getChannelData(0).set(floatData);
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioCtx.destination);
+
+      const startTime = Math.max(audioCtx.currentTime, nextPlaybackTime);
+      source.start(startTime);
+      nextPlaybackTime = startTime + buffer.duration;
+      return;
+    }
+
     let msg;
     try {
       msg = JSON.parse(evt.data);

@@ -13,16 +13,27 @@ function log(el, msg) {
 }
 
 function requireTauri() {
+  // Tauri v2 usually exposes invoke as `window.__TAURI__.core.invoke`.
+  // Some environments still expose `window.__TAURI__.invoke`.
   const t = window.__TAURI__;
-  if (!t?.invoke) {
-    throw new Error("Tauri API not found. Ensure tauri.conf.json has withGlobalTauri enabled.");
+  const invokeFn = t?.core?.invoke ?? t?.invoke;
+
+  // Fallback for internal injection in some builds.
+  const internalInvoke = window.__TAURI_INTERNALS__?.invoke;
+  const finalInvoke = invokeFn ?? internalInvoke;
+
+  if (!finalInvoke) {
+    throw new Error(
+      "Tauri API not found. Ensure tauri.conf.json has app.withGlobalTauri enabled.",
+    );
   }
-  return t;
+
+  return { invoke: finalInvoke };
 }
 
 async function invoke(cmd, args) {
-  const t = requireTauri();
-  return await t.invoke(cmd, args);
+  const tauri = requireTauri();
+  return await tauri.invoke(cmd, args);
 }
 
 function wsUrlFromIpPort(ip, port) {
@@ -49,7 +60,10 @@ async function startHost() {
   hostLogEl.textContent = "";
 
   // 1) Start signaling + mDNS (Rust)
-  const port = await invoke("start_host", { session_id: host.sessionId });
+  const port = await invoke("start_host", {
+    session_id: host.sessionId,
+    sessionId: host.sessionId,
+  });
   host.signalingPort = port;
   $("hostStatus").textContent = `Signaling on port ${port}. Waiting for receiver(s)...`;
   log(hostLogEl, `mDNS+WS started. Port=${port}`);
@@ -178,7 +192,10 @@ async function discoverHosts() {
   rxLogEl.textContent = "";
 
   log(rxLogEl, "Calling Rust discover_hosts...");
-  const hosts = await invoke("discover_hosts", { duration_ms: 3000 });
+  const hosts = await invoke("discover_hosts", {
+    duration_ms: 3000,
+    durationMs: 3000,
+  });
 
   const sel = $("hostSelect");
   sel.innerHTML = "";

@@ -1,21 +1,13 @@
 use std::{
-  collections::{HashMap, HashSet},
-  net::IpAddr,
+  collections::HashMap,
   sync::{LazyLock, Mutex},
-  time::{Duration, Instant},
 };
 
-use axum::{
-  extract::{
+use axum::extract::{
     ws::{Message as WsMessage, WebSocket, WebSocketUpgrade},
-    State,
-  },
-  routing::get,
-  Router,
-};
-use mdns_sd::{ResolvedService, ServiceDaemon, ServiceEvent, ServiceInfo};
-use serde::{Deserialize, Serialize};
-use tauri::Manager;
+  };
+use mdns_sd::ServiceDaemon;
+use serde::Serialize;
 use tokio::sync::RwLock;
 
 use futures_util::sink::SinkExt;
@@ -46,7 +38,7 @@ struct ReceiverConn {
   tx: tokio::sync::mpsc::UnboundedSender<WsMessage>,
 }
 
-struct AudioStream(cpal::Stream);
+pub(crate) struct AudioStream(pub(crate) cpal::Stream);
 // Safety: cpal::Stream is Send/Sync on most platforms.
 unsafe impl Send for AudioStream {}
 unsafe impl Sync for AudioStream {}
@@ -55,12 +47,13 @@ unsafe impl Sync for AudioStream {}
 pub(crate) struct RoutingState {
   pub(crate) hosts: HashMap<String, HostConn>,
   pub(crate) receivers: HashMap<String, ReceiverConn>,
-  pub(crate) audio_stream: Option<cpal::Stream>,
+  pub(crate) audio_stream: Option<AudioStream>,
 }
 
 fn receiver_key(session_id: &str, receiver_id: &str) -> String {
   format!("{session_id}:{receiver_id}")
 }
+
 
 pub(crate) static SIGNALING_STATE: LazyLock<RwLock<RoutingState>> = LazyLock::new(|| RwLock::new(RoutingState::default()));
 pub(crate) static STARTED_SESSION_ID: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
@@ -87,8 +80,8 @@ pub fn start_native_audio_capture(device_name: Option<String>) -> Result<cpal::S
   };
 
   let config = device.default_input_config().map_err(|e| e.to_string())?;
-  let sample_rate = config.sample_rate().0;
-  let channels = config.channels();
+  let _sample_rate = config.sample_rate().0;
+  let _channels = config.channels();
 
   let config = device.default_input_config().map_err(|e| e.to_string())?;
   let channels = config.channels();
@@ -143,7 +136,7 @@ async fn handle_ws_socket(socket: WebSocket) {
   while let Some(Ok(msg)) = receiver.next().await {
     // Handle binary (audio) if any, though usually Rust sends binary to JS, 
     // and JS only sends Text for signaling.
-    if let WsMessage::Binary(bin) = msg {
+    if let WsMessage::Binary(_bin) = msg {
       continue;
     }
 
@@ -174,7 +167,7 @@ async fn handle_ws_socket(socket: WebSocket) {
     match typ {
       "offer" => {
         let session_id = value.get("sessionId").and_then(|v| v.as_str()).unwrap_or_default();
-        let receiver_id = value.get("from").and_then(|v| v.as_str()).unwrap_or_default();
+        let _receiver_id = value.get("from").and_then(|v| v.as_str()).unwrap_or_default();
         let state = SIGNALING_STATE.read().await;
         if let Some(host_conn) = state.hosts.get(session_id) {
           let _ = host_conn.tx.send(WsMessage::Text(text));

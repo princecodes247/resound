@@ -8,13 +8,13 @@ use axum::{routing::get, Router};
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 use tokio::net::TcpListener;
 
-use super::{DiscoveredHost, MDNS_DAEMON, SERVICE_TYPE, SIGNALING_STATE, STARTED_SESSION_ID, WS_PATH, websocket_handler};
+use cpal::traits::{DeviceTrait, HostTrait};
+use super::{AudioStream, DiscoveredHost, MDNS_DAEMON, SERVICE_TYPE, SIGNALING_STATE, STARTED_SESSION_ID, WS_PATH, websocket_handler};
 
 const WS_SCHEME_PORT_FALLBACK: u16 = 0;
 
 #[tauri::command]
 pub fn list_audio_devices() -> Result<Vec<String>, String> {
-  use cpal::traits::HostTrait;
   let host = cpal::default_host();
   let devices = host.input_devices().map_err(|e| e.to_string())?;
   let names = devices
@@ -40,8 +40,12 @@ pub async fn start_host(session_id: String, device_name: Option<String>) -> Resu
   }
 
   // 1) Start native audio capture if a device is provided (or use default)
-  let stream = super::start_native_audio_capture(device_name)?;
-  SIGNALING_STATE.write().await.audio_stream = Some(stream);
+  let wrapped_stream = {
+    let stream = super::start_native_audio_capture(device_name)?;
+    AudioStream(stream)
+  };
+  SIGNALING_STATE.write().await.audio_stream = Some(wrapped_stream);
+
 
   // 2) Start websocket signaling server (random port) and return the chosen port.
   let listener = TcpListener::bind(("0.0.0.0", 0))

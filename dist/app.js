@@ -55,7 +55,7 @@ async function captureHostAudioStream() {
   const mediaDevices = navigator.mediaDevices;
   if (!mediaDevices) {
     throw new Error(
-      "Media APIs are unavailable in this WebView. Restart app and allow media permissions.",
+      "Media APIs unavailable in this WebView. Restart app after granting microphone/screen permissions to the app host (Cursor/Terminal) in macOS Privacy settings.",
     );
   }
 

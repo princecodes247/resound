@@ -28,18 +28,20 @@ pub(crate) struct DiscoveredHost {
 
 #[derive(Debug, Clone)]
 struct HostConn {
+  #[allow(dead_code)]
   _client_id: String,
   tx: tokio::sync::mpsc::UnboundedSender<WsMessage>,
 }
 
 #[derive(Debug, Clone)]
 struct ReceiverConn {
+  #[allow(dead_code)]
   _client_id: String,
   tx: tokio::sync::mpsc::UnboundedSender<WsMessage>,
 }
 
-#[allow(dead_code)]
-pub(crate) struct AudioStream(pub(crate) cpal::Stream);
+pub(crate) struct AudioStream(#[allow(dead_code)] pub(crate) cpal::Stream);
+
 // Safety: cpal::Stream is Send/Sync on most platforms.
 unsafe impl Send for AudioStream {}
 unsafe impl Sync for AudioStream {}

@@ -53,19 +53,43 @@ let audioCtx = null;
 let nextPlaybackTime = 0;
 
 async function populateDevices() {
+  const sel = $("deviceSelect");
+  const systemAudioTip = $("systemAudioTip") || createSystemAudioTip();
+
   try {
     const devices = await invoke("list_audio_devices", {});
-    const sel = $("deviceSelect");
     sel.innerHTML = '<option value="">Default Input</option>';
+
+    let loopbackFound = false;
     devices.forEach((d) => {
       const opt = document.createElement("option");
-      opt.value = d;
-      opt.textContent = d;
+      opt.value = d.name;
+      opt.textContent = d.is_loopback ? `${d.name} (System Audio)` : d.name;
       sel.appendChild(opt);
+      if (d.is_loopback) loopbackFound = true;
     });
+
+    if (loopbackFound) {
+      systemAudioTip.style.display = "none";
+    } else {
+      systemAudioTip.textContent =
+        "💡 Tip: To stream system audio, install BlackHole and select it above.";
+      systemAudioTip.style.display = "block";
+    }
   } catch (e) {
     console.error("Failed to list devices:", e);
   }
+}
+
+function createSystemAudioTip() {
+  const tip = document.createElement("div");
+  tip.id = "systemAudioTip";
+  tip.style.fontSize = "12px";
+  tip.style.marginTop = "8px";
+  tip.style.color = "#888";
+  tip.style.fontStyle = "italic";
+  $("deviceSelect").parentNode.appendChild(tip);
+  return tip;
 }
 
 populateDevices();

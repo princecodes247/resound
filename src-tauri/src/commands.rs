@@ -13,16 +13,30 @@ use super::{AudioStream, DiscoveredHost, MDNS_DAEMON, SERVICE_TYPE, SIGNALING_ST
 
 const WS_SCHEME_PORT_FALLBACK: u16 = 0;
 
+#[derive(Serialize)]
+pub struct AudioDevice {
+  pub name: String,
+  pub is_loopback: bool,
+}
+
 #[tauri::command]
-pub fn list_audio_devices() -> Result<Vec<String>, String> {
+pub fn list_audio_devices() -> Result<Vec<AudioDevice>, String> {
   let host = cpal::default_host();
   let devices = host.input_devices().map_err(|e| e.to_string())?;
-  let names = devices
+  let list: Vec<AudioDevice> = devices
     .into_iter()
     .filter_map(|d| d.name().ok())
+    .map(|name| {
+      let is_loopback = name.to_lowercase().contains("blackhole") 
+        || name.to_lowercase().contains("loopback") 
+        || name.to_lowercase().contains("vb-audio");
+      AudioDevice { name, is_loopback }
+    })
     .collect();
-  Ok(names)
+  Ok(list)
 }
+
+
 
 #[tauri::command]
 pub async fn start_host(session_id: String, device_name: Option<String>) -> Result<u16, String> {

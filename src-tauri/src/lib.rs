@@ -28,16 +28,17 @@ pub(crate) struct DiscoveredHost {
 
 #[derive(Debug, Clone)]
 struct HostConn {
-  client_id: String,
+  _client_id: String,
   tx: tokio::sync::mpsc::UnboundedSender<WsMessage>,
 }
 
 #[derive(Debug, Clone)]
 struct ReceiverConn {
-  client_id: String,
+  _client_id: String,
   tx: tokio::sync::mpsc::UnboundedSender<WsMessage>,
 }
 
+#[allow(dead_code)]
 pub(crate) struct AudioStream(pub(crate) cpal::Stream);
 // Safety: cpal::Stream is Send/Sync on most platforms.
 unsafe impl Send for AudioStream {}
@@ -81,10 +82,9 @@ pub fn start_native_audio_capture(device_name: Option<String>) -> Result<cpal::S
 
   let config = device.default_input_config().map_err(|e| e.to_string())?;
   let _sample_rate = config.sample_rate().0;
-  let _channels = config.channels();
-
-  let config = device.default_input_config().map_err(|e| e.to_string())?;
   let channels = config.channels();
+
+  let handle = tokio::runtime::Handle::current();
 
   let stream = device.build_input_stream(
     &config.into(),
@@ -98,13 +98,14 @@ pub fn start_native_audio_capture(device_name: Option<String>) -> Result<cpal::S
       }
       
       let packet = pcm;
-      tokio::spawn(async move {
+      handle.spawn(async move {
         broadcast_audio_packet(packet).await;
       });
     },
     |err| log::error!("Audio stream error: {err}"),
     None,
   ).map_err(|e| e.to_string())?;
+
 
 
   stream.play().map_err(|e| e.to_string())?;
@@ -156,10 +157,10 @@ async fn handle_ws_socket(socket: WebSocket) {
 
       let mut state = SIGNALING_STATE.write().await;
       if role == "host" {
-        state.hosts.insert(session_id, HostConn { client_id, tx: tx.clone() });
+        state.hosts.insert(session_id, HostConn { _client_id: client_id, tx: tx.clone() });
       } else if role == "receiver" {
         let key = receiver_key(&session_id, &client_id);
-        state.receivers.insert(key, ReceiverConn { client_id, tx: tx.clone() });
+        state.receivers.insert(key, ReceiverConn { _client_id: client_id, tx: tx.clone() });
       }
       continue;
     }

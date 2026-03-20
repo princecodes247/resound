@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Resound</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        margin: 16px;
+        color: #111;
+        background: #fafafa;
+      }
+      .row {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .panel {
+        flex: 1;
+        min-width: 320px;
+        background: white;
+        border: 1px solid #e8e8e8;
+        border-radius: 12px;
+        padding: 14px;
+      }
+      button {
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid #d9d9d9;
+        background: #fff;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      code {
+        background: #f2f2f2;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+      .muted {
+        color: #555;
+      }
+      .log {
+        margin-top: 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 12px;
+        background: #0b1020;
+        color: #cdd7ff;
+        padding: 10px;
+        border-radius: 10px;
+        min-height: 120px;
+        overflow: auto;
+        white-space: pre-wrap;
+      }
+      select {
+        width: 100%;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid #d9d9d9;
+        background: #fff;
+      }
+      .field {
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Resound (LAN Audio Receivers)</h1>
+    <div class="muted">
+      MVP: Host captures system audio via <code>getDisplayMedia({ audio: true })</code>, then sends it to multiple receivers using WebRTC+Opus.
+    </div>
+
+    <div class="row">
+      <div class="panel">
+        <h2>Host</h2>
+        <div class="field">
+          <button id="btnStartHost">Start Host</button>
+        </div>
+        <div class="field">
+          Session ID: <code id="hostSessionId">not started</code>
+        </div>
+        <div class="field muted" id="hostStatus">Idle</div>
+        <div class="log" id="hostLog"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Receivers</h2>
+        <div class="field">
+          <button id="btnDiscover">Discover Hosts</button>
+        </div>
+        <div class="field">
+          <select id="hostSelect" disabled></select>
+        </div>
+        <div class="field">
+          <button id="btnConnect" disabled>Connect & Play</button>
+        </div>
+        <div class="field muted" id="rxStatus">Idle</div>
+        <div class="log" id="rxLog"></div>
+      </div>
+    </div>
+
+    <audio id="audio" autoplay playsinline></audio>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
+

@@ -51,6 +51,34 @@ let host = {
   pcsByReceiverId: new Map(),
 };
 
+async function captureHostAudioStream() {
+  const mediaDevices = navigator.mediaDevices;
+  if (!mediaDevices) {
+    throw new Error(
+      "Media APIs are unavailable in this WebView. Restart app and allow media permissions.",
+    );
+  }
+
+  // Preferred path for system audio on macOS via screen/audio capture.
+  if (typeof mediaDevices.getDisplayMedia === "function") {
+    return await mediaDevices.getDisplayMedia({
+      video: false,
+      audio: true,
+    });
+  }
+
+  // Fallback path if display capture is not available in this WebView runtime.
+  // This captures microphone only (not system output).
+  if (typeof mediaDevices.getUserMedia === "function") {
+    return await mediaDevices.getUserMedia({
+      audio: true,
+      video: false,
+    });
+  }
+
+  throw new Error("No supported media capture API found (getDisplayMedia/getUserMedia).");
+}
+
 async function startHost() {
   host.sessionId = crypto.randomUUID();
   host.clientId = crypto.randomUUID();
@@ -71,15 +99,12 @@ async function startHost() {
   // 2) Capture system audio first (macOS permission prompt).
   // Doing this before WS registration avoids a race where a receiver sends an offer
   // before `host.audioTrack` is available.
-  $("hostStatus").textContent = "Requesting screen+audio capture... (macOS will prompt)";
-  log(hostLogEl, "Requesting getDisplayMedia({ audio: true })...");
-  host.stream = await navigator.mediaDevices.getDisplayMedia({
-    video: false,
-    audio: true,
-  });
+  $("hostStatus").textContent = "Requesting audio capture permissions...";
+  log(hostLogEl, "Requesting capture stream...");
+  host.stream = await captureHostAudioStream();
   const audioTracks = host.stream.getAudioTracks();
   if (!audioTracks.length) {
-    throw new Error("No audio track returned from getDisplayMedia.");
+    throw new Error("No audio track returned from media capture.");
   }
   host.audioTrack = audioTracks[0];
   $("hostStatus").textContent = "Audio capture ready. Connecting signaling...";

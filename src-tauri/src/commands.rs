@@ -54,7 +54,7 @@ pub async fn start_host(session_id: String) -> Result<u16, String> {
     .collect::<String>()
     .replace('-', "");
 
-  let host_name = format!("resound-host-{short_name}");
+  let host_name = format!("resound-host-{short_name}.local.");
 
   let mut properties: HashMap<String, String> = HashMap::new();
   properties.insert("sid".to_string(), session_id.clone());

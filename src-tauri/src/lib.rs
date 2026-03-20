@@ -21,17 +21,17 @@ use tokio::sync::RwLock;
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 
-const SERVICE_TYPE: &str = "_resound-audio._tcp.local.";
-const WS_PATH: &str = "/ws";
+pub(crate) const SERVICE_TYPE: &str = "_resound-audio._tcp.local.";
+pub(crate) const WS_PATH: &str = "/ws";
 
 mod commands;
 
 #[derive(Debug, Clone, Serialize)]
-struct DiscoveredHost {
-  name: String,
-  ip: String,
-  port: u16,
-  session_id: String,
+pub(crate) struct DiscoveredHost {
+  pub(crate) name: String,
+  pub(crate) ip: String,
+  pub(crate) port: u16,
+  pub(crate) session_id: String,
 }
 
 #[derive(Debug, Clone)]
@@ -52,19 +52,20 @@ unsafe impl Send for AudioStream {}
 unsafe impl Sync for AudioStream {}
 
 #[derive(Default)]
-struct RoutingState {
-  hosts: HashMap<String, HostConn>,
-  receivers: HashMap<String, ReceiverConn>,
-  audio_stream: Option<cpal::Stream>,
+pub(crate) struct RoutingState {
+  pub(crate) hosts: HashMap<String, HostConn>,
+  pub(crate) receivers: HashMap<String, ReceiverConn>,
+  pub(crate) audio_stream: Option<cpal::Stream>,
 }
 
 fn receiver_key(session_id: &str, receiver_id: &str) -> String {
   format!("{session_id}:{receiver_id}")
 }
 
-static SIGNALING_STATE: LazyLock<RwLock<RoutingState>> = LazyLock::new(|| RwLock::new(RoutingState::default()));
-static STARTED_SESSION_ID: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
-static MDNS_DAEMON: LazyLock<Mutex<Option<ServiceDaemon>>> = LazyLock::new(|| Mutex::new(None));
+pub(crate) static SIGNALING_STATE: LazyLock<RwLock<RoutingState>> = LazyLock::new(|| RwLock::new(RoutingState::default()));
+pub(crate) static STARTED_SESSION_ID: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
+pub(crate) static MDNS_DAEMON: LazyLock<Mutex<Option<ServiceDaemon>>> = LazyLock::new(|| Mutex::new(None));
+
 
 pub async fn broadcast_audio_packet(packet: Vec<u8>) {
   let state = SIGNALING_STATE.read().await;
@@ -115,6 +116,110 @@ pub fn start_native_audio_capture(device_name: Option<String>) -> Result<cpal::S
 
   stream.play().map_err(|e| e.to_string())?;
   Ok(stream)
+}
+async fn websocket_handler(ws: WebSocketUpgrade) -> impl axum::response::IntoResponse {
+  ws.on_upgrade(move |socket| async move {
+    handle_ws_socket(socket).await;
+  })
+}
+
+async fn handle_ws_socket(socket: WebSocket) {
+  let (mut sender, mut receiver) = socket.split();
+  let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<WsMessage>();
+
+  // writer task
+  tokio::spawn(async move {
+    while let Some(msg) = rx.recv().await {
+      if sender.send(msg).await.is_err() {
+        break;
+      }
+    }
+  });
+
+  let mut my_role: Option<String> = None;
+  let mut my_session_id: Option<String> = None;
+  let mut my_client_id: Option<String> = None;
+
+  while let Some(Ok(msg)) = receiver.next().await {
+    // Handle binary (audio) if any, though usually Rust sends binary to JS, 
+    // and JS only sends Text for signaling.
+    if let WsMessage::Binary(bin) = msg {
+      continue;
+    }
+
+    let WsMessage::Text(text) = msg else { continue };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else { continue };
+
+    let typ = value.get("type").and_then(|v| v.as_str()).unwrap_or_default();
+
+    if typ == "register" {
+      let session_id = value.get("sessionId").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+      let role = value.get("role").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+      let client_id = value.get("clientId").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+
+      my_role = Some(role.clone());
+      my_session_id = Some(session_id.clone());
+      my_client_id = Some(client_id.clone());
+
+      let mut state = SIGNALING_STATE.write().await;
+      if role == "host" {
+        state.hosts.insert(session_id, HostConn { client_id, tx: tx.clone() });
+      } else if role == "receiver" {
+        let key = receiver_key(&session_id, &client_id);
+        state.receivers.insert(key, ReceiverConn { client_id, tx: tx.clone() });
+      }
+      continue;
+    }
+
+    match typ {
+      "offer" => {
+        let session_id = value.get("sessionId").and_then(|v| v.as_str()).unwrap_or_default();
+        let receiver_id = value.get("from").and_then(|v| v.as_str()).unwrap_or_default();
+        let state = SIGNALING_STATE.read().await;
+        if let Some(host_conn) = state.hosts.get(session_id) {
+          let _ = host_conn.tx.send(WsMessage::Text(text));
+        }
+      }
+      "answer" => {
+        let session_id = value.get("sessionId").and_then(|v| v.as_str()).unwrap_or_default();
+        let receiver_id = value.get("to").and_then(|v| v.as_str()).unwrap_or_default();
+        let state = SIGNALING_STATE.read().await;
+        let key = receiver_key(session_id, receiver_id);
+        if let Some(receiver_conn) = state.receivers.get(&key) {
+          let _ = receiver_conn.tx.send(WsMessage::Text(text));
+        }
+      }
+      "ice" => {
+        let session_id = value.get("sessionId").and_then(|v| v.as_str()).unwrap_or_default();
+        let maybe_to = value.get("to").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+        let maybe_from = value.get("from").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+
+        let state = SIGNALING_STATE.read().await;
+        if !maybe_to.is_empty() {
+          let key = receiver_key(session_id, &maybe_to);
+          if let Some(receiver_conn) = state.receivers.get(&key) {
+            let _ = receiver_conn.tx.send(WsMessage::Text(text));
+          }
+        } else if !maybe_from.is_empty() {
+          if let Some(host_conn) = state.hosts.get(session_id) {
+            let _ = host_conn.tx.send(WsMessage::Text(text));
+          }
+        }
+      }
+      _ => {}
+    }
+  }
+
+  // Cleanup on disconnect
+  if let (Some(role), Some(session_id), Some(client_id)) = (my_role, my_session_id, my_client_id) {
+    let mut state = SIGNALING_STATE.write().await;
+    if role == "host" {
+      state.hosts.remove(&session_id);
+    } else {
+      let key = receiver_key(&session_id, &client_id);
+      state.receivers.remove(&key);
+    }
+  }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

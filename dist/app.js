@@ -53,36 +53,17 @@ let host = {
 
 async function captureHostAudioStream() {
   const mediaDevices = navigator.mediaDevices;
-  if (!mediaDevices) {
+  if (!mediaDevices || typeof mediaDevices.getUserMedia !== "function") {
     throw new Error(
       "Media APIs unavailable in this WebView. Restart app after granting microphone/screen permissions to the app host (Cursor/Terminal) in macOS Privacy settings.",
     );
   }
 
-  // Preferred path for system audio on macOS via screen/audio capture.
-  if (typeof mediaDevices.getDisplayMedia === "function") {
-    const stream = await mediaDevices.getDisplayMedia({
-      // WebKit typically requires a video constraint for getDisplayMedia.
-      video: true,
-      audio: true,
-    });
-    // We only need audio for LAN playback.
-    for (const track of stream.getVideoTracks()) {
-      track.enabled = false;
-    }
-    return stream;
-  }
-
-  // Fallback path if display capture is not available in this WebView runtime.
-  // This captures microphone only (not system output).
-  if (typeof mediaDevices.getUserMedia === "function") {
-    return await mediaDevices.getUserMedia({
-      audio: true,
-      video: false,
-    });
-  }
-
-  throw new Error("No supported media capture API found (getDisplayMedia/getUserMedia).");
+  // DEBUG: Try microphone only to isolate system audio issues
+  return await mediaDevices.getUserMedia({
+    audio: true,
+    video: false,
+  });
 }
 
 async function fallbackToMicrophoneIfNeeded(stream) {
@@ -119,7 +100,8 @@ async function startHost() {
     sessionId: host.sessionId,
   });
   host.signalingPort = port;
-  $("hostStatus").textContent = `Signaling on port ${port}. Waiting for receiver(s)...`;
+  $("hostStatus").textContent =
+    `Signaling on port ${port}. Waiting for receiver(s)...`;
   log(hostLogEl, `mDNS+WS started. Port=${port}`);
 
   // 2) Capture system audio first (macOS permission prompt).
@@ -140,9 +122,12 @@ async function startHost() {
   log(hostLogEl, "Audio capture ready.");
 
   // 3) Connect to local signaling server as "host"
-  host.ws = new WebSocket(`ws://127.0.0.1:${host.signalingPort}/ws`);
+  const wsUrl = `ws://127.0.0.1:${host.signalingPort}/ws`;
+  log(hostLogEl, `Connecting to WebSocket: ${wsUrl}`);
+  host.ws = new WebSocket(wsUrl);
+
   host.ws.onopen = () => {
-    log(hostLogEl, "WebSocket connected. Registering host...");
+    log(hostLogEl, "WebSocket connected successfully. Registering host...");
     host.ws.send(
       JSON.stringify({
         type: "register",
@@ -151,6 +136,25 @@ async function startHost() {
         clientId: host.clientId,
       }),
     );
+  };
+
+  host.ws.onerror = (err) => {
+    log(
+      hostLogEl,
+      `WebSocket ERROR. Check browser console or if Axum is blocked.`,
+    );
+    console.error("WebSocket Error:", err);
+    $("hostStatus").textContent = "Signaling connection error (WebSocket).";
+  };
+
+  host.ws.onclose = (evt) => {
+    log(
+      hostLogEl,
+      `WebSocket closed. Code: ${evt.code}, Reason: ${evt.reason || "none"}`,
+    );
+    if (evt.code !== 1000) {
+      $("hostStatus").textContent = `Signaling closed (code ${evt.code}).`;
+    }
   };
 
   host.ws.onmessage = async (evt) => {
@@ -183,7 +187,10 @@ async function startHost() {
         };
 
         pc.onconnectionstatechange = () => {
-          log(hostLogEl, `Receiver=${receiverId} connectionState=${pc.connectionState}`);
+          log(
+            hostLogEl,
+            `Receiver=${receiverId} connectionState=${pc.connectionState}`,
+          );
         };
 
         pc.ontrack = () => {
@@ -269,7 +276,8 @@ async function discoverHosts() {
 
   sel.disabled = false;
   $("btnConnect").disabled = false;
-  $("rxStatus").textContent = `Found ${hosts.length} host(s). Select one and connect.`;
+  $("rxStatus").textContent =
+    `Found ${hosts.length} host(s). Select one and connect.`;
   log(rxLogEl, `Found hosts: ${hosts.length}`);
 }
 
@@ -322,7 +330,9 @@ async function connectAndPlay() {
 
     if (msg.type === "answer") {
       log(rxLogEl, "Received answer. Applying remote description...");
-      await receiver.pc.setRemoteDescription(new RTCSessionDescription(msg.answer));
+      await receiver.pc.setRemoteDescription(
+        new RTCSessionDescription(msg.answer),
+      );
     } else if (msg.type === "ice") {
       if (!msg.candidate) return;
       await receiver.pc.addIceCandidate(msg.candidate);
@@ -357,7 +367,8 @@ async function connectAndPlay() {
     }),
   );
 
-  $("rxStatus").textContent = "Connected. If you granted audio permissions, playback should start shortly.";
+  $("rxStatus").textContent =
+    "Connected. If you granted audio permissions, playback should start shortly.";
   log(rxLogEl, "Offer sent. Waiting for remote tracks...");
 }
 
@@ -397,4 +408,3 @@ $("btnConnect").addEventListener("click", async () => {
     $("btnConnect").disabled = false;
   }
 });
-

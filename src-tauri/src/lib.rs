@@ -24,6 +24,7 @@ pub(crate) struct DiscoveredHost {
   pub(crate) ip: String,
   pub(crate) port: u16,
   pub(crate) session_id: String,
+  pub(crate) sample_rate: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -71,7 +72,7 @@ pub async fn broadcast_audio_packet(packet: Vec<u8>) {
   }
 }
 
-pub fn start_native_audio_capture(device_name: Option<String>, monitor: bool) -> Result<Vec<cpal::Stream>, String> {
+pub fn start_native_audio_capture(device_name: Option<String>, monitor: bool) -> Result<(Vec<cpal::Stream>, u32), String> {
   use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
   let host = cpal::default_host();
   let device = if let Some(name) = device_name {
@@ -85,6 +86,7 @@ pub fn start_native_audio_capture(device_name: Option<String>, monitor: bool) ->
 
   let config = device.default_input_config().map_err(|e| e.to_string())?;
   let channels = config.channels();
+  let sample_rate = config.sample_rate().0;
 
   let handle = tokio::runtime::Handle::current();
   
@@ -135,7 +137,25 @@ pub fn start_native_audio_capture(device_name: Option<String>, monitor: bool) ->
 
   if monitor {
       let output_device = host.default_output_device().ok_or("No default output device found for monitoring")?;
-      let output_config = output_device.default_output_config().map_err(|e| e.to_string())?;
+      
+      // Try to find a config that matches the input sample rate
+      let output_config = output_device.supported_output_configs()
+          .map_err(|e| e.to_string())?
+          .filter_map(|c| {
+              if c.min_sample_rate().0 <= sample_rate && c.max_sample_rate().0 >= sample_rate {
+                  Some(c.with_sample_rate(cpal::SampleRate(sample_rate)))
+              } else {
+                  None
+              }
+          })
+          .next()
+          .map(|c| Ok::<cpal::SupportedStreamConfig, String>(c.into()))
+          .unwrap_or_else(|| {
+              output_device.default_output_config()
+                  .map_err(|e| e.to_string())
+                  .map(|c| c.into())
+          })?;
+
       let output_channels = output_config.channels();
       let output_monitor_buffer = monitor_buffer.unwrap();
 
@@ -160,7 +180,7 @@ pub fn start_native_audio_capture(device_name: Option<String>, monitor: bool) ->
   }
 
   streams[0].play().map_err(|e| e.to_string())?;
-  Ok(streams)
+  Ok((streams, sample_rate))
 }
 async fn websocket_handler(ws: WebSocketUpgrade) -> impl axum::response::IntoResponse {
   ws.on_upgrade(move |socket| async move {

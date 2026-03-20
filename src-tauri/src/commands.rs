@@ -54,9 +54,9 @@ pub async fn start_host(session_id: String, device_name: Option<String>, monitor
     }
   }
 
-  let wrapped_stream = {
-    let stream = super::start_native_audio_capture(device_name, monitor.unwrap_or(false))?;
-    AudioStream(stream)
+  let (wrapped_stream, sample_rate) = {
+    let (streams, sr) = super::start_native_audio_capture(device_name, monitor.unwrap_or(false))?;
+    (AudioStream(streams), sr)
   };
   SIGNALING_STATE.write().await.audio_stream = Some(wrapped_stream);
 
@@ -99,6 +99,7 @@ pub async fn start_host(session_id: String, device_name: Option<String>, monitor
 
   let mut properties: HashMap<String, String> = HashMap::new();
   properties.insert("sid".to_string(), session_id.clone());
+  properties.insert("sr".to_string(), sample_rate.to_string());
 
   let service_info = ServiceInfo::new(
     SERVICE_TYPE,
@@ -166,11 +167,18 @@ pub async fn discover_hosts(duration_ms: u64) -> Result<Vec<DiscoveredHost>, Str
             .unwrap_or(&resolved.host)
             .to_string();
 
+          let sample_rate = resolved
+            .txt_properties
+            .get_property_val_str("sr")
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(44100);
+
           let host = DiscoveredHost {
             name,
             ip,
             port: resolved.port,
             session_id: session_id.clone(),
+            sample_rate,
           };
 
           by_session_id.insert(session_id, host);

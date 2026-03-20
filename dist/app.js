@@ -362,7 +362,8 @@ async function connectAndPlay() {
       const floatData = new Float32Array(arrayBuffer);
       if (floatData.length === 0) return;
 
-      const buffer = audioCtx.createBuffer(1, floatData.length, 44100);
+      const sampleRate = receiver.host?.sample_rate || 44100;
+      const buffer = audioCtx.createBuffer(1, floatData.length, sampleRate);
       buffer.getChannelData(0).set(floatData);
       const source = audioCtx.createBufferSource();
       source.buffer = buffer;

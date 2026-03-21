@@ -1,6 +1,7 @@
 use std::{
   collections::{HashMap, VecDeque},
   sync::{Arc, LazyLock, Mutex},
+  io::Write,
 };
 
 use axum::extract::{
@@ -131,10 +132,11 @@ pub async fn start_native_audio_capture(
 
           aggregate_buf.extend_from_slice(samples);
 
-          if aggregate_buf.len() / 4 >= target_samples {
+          let frame_size = 4 * channels as usize;
+          if aggregate_buf.len() >= target_samples * frame_size {
               let mut final_packet = Vec::with_capacity(8 + aggregate_buf.len());
-              final_packet.extend_from_slice(&first_timestamp.to_le_bytes());
-              final_packet.extend_from_slice(&aggregate_buf);
+              let _ = final_packet.write_all(&first_timestamp.to_le_bytes());
+              let _ = final_packet.write_all(&aggregate_buf);
               
               broadcast_audio_packet(final_packet).await;
               aggregate_buf.clear();
@@ -167,13 +169,12 @@ pub async fn start_native_audio_capture(
           0
       };
 
-      let mut pcm = Vec::with_capacity(8 + (data.len() / channels as usize * 4));
+      let mut pcm = Vec::with_capacity(8 + data.len() * 4);
       // Prepend timestamp (8 bytes LE)
-      pcm.extend_from_slice(&timestamp.to_le_bytes());
+      let _ = pcm.write_all(&timestamp.to_le_bytes());
 
-      for chunk in data.chunks(channels as usize) {
-        let sample = chunk[0];
-        pcm.extend_from_slice(&sample.to_le_bytes());
+      for &sample in data {
+        let _ = pcm.write_all(&sample.to_le_bytes());
       }
       
       let packet = pcm;
@@ -428,7 +429,6 @@ pub async fn start_native_receiver(
     use futures_util::sink::SinkExt; // Added sink::SinkExt
     use futures_util::stream::StreamExt;
 
-    use std::io::Write;
     let mut log_file = std::fs::File::create("receiver_log.txt").unwrap();
     writeln!(log_file, "Native receiver starting...").unwrap();
 

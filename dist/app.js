@@ -51,6 +51,8 @@ let host = {
 
 let audioCtx = null;
 let nextPlaybackTime = 0;
+let syncOffset = null; // Host relative sync offset
+const TARGET_DELAY_MS = 200;
 
 async function populateDevices() {
   const sel = $("deviceSelect");
@@ -379,10 +381,20 @@ async function connectAndPlay() {
 
   receiver.ws.onmessage = async (evt) => {
     if (evt.data instanceof Blob) {
-      // Binary PCM data from Rust
       const arrayBuffer = await evt.data.arrayBuffer();
+      if (arrayBuffer.byteLength < 8) return;
+
+      const dataView = new DataView(arrayBuffer);
+      const hostTimeMs = Number(dataView.getBigUint64(0, true));
+      const hostTimeSec = hostTimeMs / 1000;
+
       if (!audioCtx) audioCtx = new AudioContext();
-      const floatData = new Float32Array(arrayBuffer);
+
+      if (syncOffset === null) {
+        syncOffset = audioCtx.currentTime - hostTimeSec;
+      }
+
+      const floatData = new Float32Array(arrayBuffer, 8);
       if (floatData.length === 0) return;
 
       const sampleRate = receiver.host?.sample_rate || 44100;
@@ -392,14 +404,13 @@ async function connectAndPlay() {
       source.buffer = buffer;
       source.connect(audioCtx.destination);
 
-      // Latency snapping: if scheduled too far ahead (>200ms), skip the lag
-      let startTime = Math.max(audioCtx.currentTime, nextPlaybackTime);
-      if (startTime > audioCtx.currentTime + 0.2) {
-        startTime = audioCtx.currentTime;
+      const playbackTime = hostTimeSec + syncOffset + TARGET_DELAY_MS / 1000;
+
+      if (Math.abs(playbackTime - audioCtx.currentTime) > 1.0) {
+        syncOffset = audioCtx.currentTime - hostTimeSec;
       }
 
-      source.start(startTime);
-      nextPlaybackTime = startTime + buffer.duration;
+      source.start(Math.max(audioCtx.currentTime, playbackTime));
       return;
     }
 

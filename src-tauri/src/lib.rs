@@ -15,6 +15,7 @@ use futures_util::stream::StreamExt;
 
 pub(crate) const SERVICE_TYPE: &str = "_resound-audio._tcp.local.";
 pub(crate) const WS_PATH: &str = "/ws";
+pub(crate) const TARGET_DELAY_MS: u32 = 200;
 
 mod commands;
 
@@ -63,6 +64,7 @@ pub(crate) static SIGNALING_STATE: LazyLock<RwLock<RoutingState>> = LazyLock::ne
 pub(crate) static STARTED_SESSION_ID: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
 pub(crate) static MDNS_DAEMON: LazyLock<Mutex<Option<ServiceDaemon>>> = LazyLock::new(|| Mutex::new(None));
 pub(crate) static SERVER_SHUTDOWN: LazyLock<Mutex<Option<tokio::sync::oneshot::Sender<()>>>> = LazyLock::new(|| Mutex::new(None));
+pub(crate) static HOST_START_TIME: LazyLock<Mutex<Option<std::time::Instant>>> = LazyLock::new(|| Mutex::new(None));
 
 
 pub async fn broadcast_audio_packet(packet: Vec<u8>) {
@@ -89,6 +91,8 @@ pub fn start_native_audio_capture(
     host.default_input_device().ok_or("No default input device found")?
   };
 
+  *HOST_START_TIME.lock().unwrap() = Some(std::time::Instant::now());
+
   let config = device.default_input_config().map_err(|e| e.to_string())?;
   let channels = config.channels();
   let sample_rate = config.sample_rate().0;
@@ -107,8 +111,17 @@ pub fn start_native_audio_capture(
   let input_stream = device.build_input_stream(
     &config.into(),
     move |data: &[f32], _: &cpal::InputCallbackInfo| {
-      // 1) Forward to receivers
-      let mut pcm = Vec::with_capacity(data.len() / channels as usize * 4);
+      // 1) Forward to receivers with timestamp
+      let timestamp = if let Some(start) = *HOST_START_TIME.lock().unwrap() {
+          start.elapsed().as_millis() as u64
+      } else {
+          0
+      };
+
+      let mut pcm = Vec::with_capacity(8 + (data.len() / channels as usize * 4));
+      // Prepend timestamp (8 bytes LE)
+      pcm.extend_from_slice(&timestamp.to_le_bytes());
+
       for chunk in data.chunks(channels as usize) {
         let sample = chunk[0];
         pcm.extend_from_slice(&sample.to_le_bytes());
@@ -179,12 +192,20 @@ pub fn start_native_audio_capture(
           &output_config.into(),
           move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
               if let Ok(mut buf) = output_monitor_buffer.lock() {
-                  // Add a small pre-buffer to prevent stuttering
-                  if buf.len() < 512 {
+                  let delay_samples = (sample_rate as u32 * TARGET_DELAY_MS / 1000) as usize;
+
+                  // Enforce Global Delay (200ms)
+                  if buf.len() < delay_samples {
                       for s in data.iter_mut() {
                           *s = 0.0;
                       }
                       return;
+                  }
+
+                  // Catch-up: if buffer is too large (>300ms), drain back to 200ms
+                  if buf.len() > delay_samples + (sample_rate as usize / 10) {
+                      let to_remove = buf.len() - delay_samples;
+                      buf.drain(0..to_remove);
                   }
 
                   for frame in data.chunks_mut(output_channels as usize) {

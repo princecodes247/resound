@@ -142,6 +142,52 @@
           </div>
         </div>
 
+        <div class="field" id="boostControls">
+          <div
+            style="
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+              font-size: 13px;
+              margin-top: 8px;
+            "
+          >
+            <div style="display: flex; justify-content: space-between">
+              <span>Monitor Boost:</span>
+              <span id="monitorBoostVal">1.5x</span>
+            </div>
+            <input
+              type="range"
+              id="monitorBoost"
+              min="1"
+              max="3"
+              step="0.1"
+              value="1.5"
+              style="width: 100%"
+            />
+
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                margin-top: 4px;
+              "
+            >
+              <span>Broadcast Boost:</span>
+              <span id="broadcastBoostVal">3.0x</span>
+            </div>
+            <input
+              type="range"
+              id="broadcastBoost"
+              min="1"
+              max="3"
+              step="0.1"
+              value="3.0"
+              style="width: 100%"
+            />
+          </div>
+        </div>
+
         <div class="field">
           Session ID: <code id="hostSessionId">not started</code>
         </div>
@@ -158,6 +204,29 @@
           <select id="hostSelect" disabled></select>
         </div>
         <div class="field">
+          <div
+            style="
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+              font-size: 13px;
+              margin-bottom: 8px;
+            "
+          >
+            <div style="display: flex; justify-content: space-between">
+              <span>Output Boost:</span>
+              <span id="outputBoostVal">1.2x</span>
+            </div>
+            <input
+              type="range"
+              id="outputBoost"
+              min="1"
+              max="3"
+              step="0.1"
+              value="1.2"
+              style="width: 100%"
+            />
+          </div>
           <button id="btnConnect" disabled>Connect & Play</button>
           <button
             id="btnDisconnect"

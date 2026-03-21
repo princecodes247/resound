@@ -133,16 +133,22 @@ async function startHost() {
     hostLogEl,
     `Starting host with device=${deviceName || "default"} monitor=${monitor} (skip=${monitorSkipChannels})...`,
   );
+  const monitorGain = parseFloat($("monitorBoost").value);
+  const broadcastGain = parseFloat($("broadcastBoost").value);
+
   const port = await invoke("start_host", {
     session_id: host.sessionId,
     sessionId: host.sessionId,
     device_name: deviceName,
     deviceName: deviceName,
+    monitorLength: monitor,
     monitor: monitor,
     monitor_device: monitorDevice,
     monitorDevice: monitorDevice,
     monitor_skip_channels: monitorSkipChannels,
     monitorSkipChannels: monitorSkipChannels,
+    monitorGain,
+    broadcastGain,
   });
   host.signalingPort = port;
   $("hostStatus").textContent =
@@ -371,12 +377,14 @@ async function connectAndPlay() {
   log(rxLogEl, `Connecting to ${hostInfo.ip}:${hostInfo.port} (Native)`);
 
   try {
+    const outputGain = parseFloat($("outputBoost").value);
     await invoke("start_receiver", {
       hostIp: hostInfo.ip,
       hostPort: hostInfo.port,
       sessionId: hostInfo.session_id,
       sampleRate: hostInfo.sample_rate || 44100,
       channels: hostInfo.channels || 2,
+      outputGain,
     });
     $("rxStatus").textContent = "Playing (Native)";
     log(rxLogEl, "Native audio receiver started.");
@@ -446,6 +454,16 @@ $("btnDisconnect").addEventListener("click", async () => {
     log(rxLogEl, `Error stopping receiver: ${err}`);
     $("btnDisconnect").disabled = false;
   }
+});
+
+$("monitorBoost").addEventListener("input", (e) => {
+  $("monitorBoostVal").textContent = `${e.target.value}x`;
+});
+$("broadcastBoost").addEventListener("input", (e) => {
+  $("broadcastBoostVal").textContent = `${e.target.value}x`;
+});
+$("outputBoost").addEventListener("input", (e) => {
+  $("outputBoostVal").textContent = `${e.target.value}x`;
 });
 
 $("monitorCheckbox").addEventListener("change", (e) => {

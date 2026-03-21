@@ -92,6 +92,8 @@ pub async fn start_native_audio_capture(
     monitor: bool,
     monitor_device_name: Option<String>,
     monitor_skip_channels: u16,
+    monitor_gain: f32,
+    broadcast_gain: f32,
 ) -> Result<(Vec<cpal::Stream>, u32, u16), String> {
   use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
   let host = cpal::default_host();
@@ -173,13 +175,12 @@ pub async fn start_native_audio_capture(
       // Prepend timestamp (8 bytes LE)
       pcm.extend_from_slice(&timestamp.to_le_bytes());
 
-      // Apply digital gain (3.0x) and clamp to avoid clipping
+      // Apply digital gain and clamp to avoid clipping
       let mut peak = 0.0f32;
-      let gain = 3.0f32;
       for &s in data {
           let abs_s = s.abs();
           if abs_s > peak { peak = abs_s; }
-          let boosted = (s * gain).clamp(-1.0, 1.0);
+          let boosted = (s * broadcast_gain).clamp(-1.0, 1.0);
           pcm.extend_from_slice(&boosted.to_le_bytes());
       }
 
@@ -192,8 +193,10 @@ pub async fn start_native_audio_capture(
       if let Some(ref buf_arc) = input_monitor_buffer {
           if let Ok(mut buf) = buf_arc.lock() {
               // Only push first channel to simplify monitoring (mono)
+              // Apply the monitor_gain
               for chunk in data.chunks(channels as usize) {
-                  buf.push_back(chunk[0]);
+                  let boosted = (chunk[0] * monitor_gain).clamp(-1.0, 1.0);
+                  buf.push_back(boosted);
               }
               // Prevent buffer from growing indefinitely (latency). 
               // 8192 samples at 48kHz is ~170ms. 
@@ -428,6 +431,7 @@ pub async fn start_native_receiver(
     session_id: String,
     _sample_rate: u32,
     host_channels: u32,
+    output_gain: f32,
 ) -> Result<AudioStream, String> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     use tokio_tungstenite::tungstenite::protocol::Message as TMessage;
@@ -550,8 +554,6 @@ pub async fn start_native_receiver(
                 for x in data.iter_mut() { *x = 0.0; }
                 return;
             }
-
-            let output_gain = 1.2f32; // Final stage boost
 
             if host_channels as usize == channels {
                 for x in data.iter_mut() {

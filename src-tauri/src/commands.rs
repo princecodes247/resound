@@ -59,7 +59,9 @@ pub async fn start_host(
     device_name: Option<String>, 
     monitor: Option<bool>, 
     monitor_device: Option<String>,
-    monitor_skip_channels: Option<u16>
+    monitor_skip_channels: Option<u16>,
+    monitor_gain: f32,
+    broadcast_gain: f32
 ) -> Result<u16, String> {
   // Keep session id stable for this app instance.
   {
@@ -79,7 +81,9 @@ pub async fn start_host(
         device_name.clone(), 
         monitor.unwrap_or(false), 
         monitor_device, 
-        monitor_skip_channels.unwrap_or(0)
+        monitor_skip_channels.unwrap_or(0),
+        monitor_gain,
+        broadcast_gain
     ).await?;
     (AudioStream(streams), sr, ch)
   };
@@ -267,8 +271,9 @@ pub async fn start_receiver(
     session_id: String,
     sample_rate: u32,
     channels: u32,
+    output_gain: f32,
 ) -> Result<(), String> {
-    let wrapped_stream = super::start_native_receiver(host_ip, host_port, session_id, sample_rate, channels).await?;
+    let wrapped_stream = super::start_native_receiver(host_ip, host_port, session_id, sample_rate, channels, output_gain).await?;
     let mut state = SIGNALING_STATE.write().await;
     state.receiver_stream = Some(wrapped_stream);
     Ok(())

@@ -344,6 +344,18 @@ async function connectAndPlay() {
   const sel = $("hostSelect");
   if (!sel.value) return;
 
+  // 1) Cleanup previous state
+  if (receiver.ws) {
+    receiver.ws.close();
+    receiver.ws = null;
+  }
+  if (receiver.pc) {
+    receiver.pc.close();
+    receiver.pc = null;
+  }
+  syncOffset = null;
+  nextPlaybackTime = 0;
+
   const hostInfo = JSON.parse(sel.value);
   receiver.host = hostInfo;
 

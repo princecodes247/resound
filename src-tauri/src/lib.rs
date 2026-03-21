@@ -42,7 +42,7 @@ struct ReceiverConn {
   tx: tokio::sync::mpsc::UnboundedSender<WsMessage>,
 }
 
-pub(crate) struct AudioStream(#[allow(dead_code)] pub(crate) Vec<cpal::Stream>);
+pub struct AudioStream(#[allow(dead_code)] pub(crate) Vec<cpal::Stream>);
 
 impl Drop for AudioStream {
     fn drop(&mut self) {
@@ -63,6 +63,7 @@ pub(crate) struct RoutingState {
   pub(crate) hosts: HashMap<String, HostConn>,
   pub(crate) receivers: HashMap<String, ReceiverConn>,
   pub(crate) audio_stream: Option<AudioStream>,
+  pub(crate) receiver_stream: Option<AudioStream>,
   pub(crate) broadcast_tx: Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>,
 }
 
@@ -394,7 +395,9 @@ pub fn run() {
       commands::stop_host,
       commands::discover_hosts,
       commands::list_audio_devices,
-      commands::list_output_devices
+      commands::list_output_devices,
+      commands::start_receiver,
+      commands::stop_receiver
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -410,3 +413,92 @@ pub fn run() {
     .expect("error while running tauri application");
 }
 
+
+pub async fn start_native_receiver(
+    host_ip: String,
+    host_port: u16,
+    _session_id: String,
+    _sample_rate: u32,
+) -> Result<AudioStream, String> {
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+    use tokio_tungstenite::connect_async;
+    use tokio_tungstenite::tungstenite::protocol::Message as TMessage;
+    use futures_util::stream::StreamExt;
+
+    let ws_url = format!("ws://{host_ip}:{host_port}{WS_PATH}");
+    let (ws_stream, _) = connect_async(ws_url).await.map_err(|e| e.to_string())?;
+    let (_, mut read) = ws_stream.split();
+
+    let host = cpal::default_host();
+    let device = host.default_output_device().ok_or("No default output device found")?;
+    let config = device.default_output_config().map_err(|e| e.to_string())?;
+    let sample_rate = config.sample_rate().0;
+    
+    let playback_buf = Arc::new(Mutex::new(VecDeque::<f32>::new()));
+    let playback_buf_clone = playback_buf.clone();
+
+    // High-performance playback task
+    tokio::spawn(async move {
+        let mut sync_offset: Option<f64> = None;
+        let start_instant = std::time::Instant::now();
+
+        while let Some(msg) = read.next().await {
+            let data = match msg {
+                Ok(TMessage::Binary(d)) => d,
+                _ => continue,
+            };
+            if data.len() < 8 { continue; }
+
+            let host_time_ms = u64::from_le_bytes(data[0..8].try_into().unwrap_or([0; 8]));
+            let host_time_sec = host_time_ms as f64 / 1000.0;
+            let current_receiver_sec = start_instant.elapsed().as_secs_f64();
+
+            // Sliding minimum sync: align to the fastest packet
+            let current_offset = current_receiver_sec - host_time_sec;
+            if sync_offset.is_none() || current_offset < sync_offset.unwrap() {
+                sync_offset = Some(current_offset);
+            }
+
+            let samples = &data[8..];
+            let float_samples: Vec<f32> = samples.chunks_exact(4)
+                .map(|c| f32::from_le_bytes(c.try_into().unwrap()))
+                .collect();
+
+            {
+                let mut buf = playback_buf.lock().unwrap();
+                buf.extend(float_samples);
+
+                // Simple jitter buffer: if we have more than 200ms, drain to TARGET_DELAY
+                let delay_samples = (sample_rate as f64 * TARGET_DELAY_MS as f64 / 1000.0) as usize;
+                if buf.len() > delay_samples + (sample_rate as usize / 10) {
+                    let to_remove = buf.len() - delay_samples;
+                    buf.drain(0..to_remove);
+                }
+            }
+        }
+        log::info!("Receiver WebSocket task stopped.");
+    });
+
+    let stream = device.build_output_stream(
+        &config.into(),
+        move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+            let mut buf = playback_buf_clone.lock().unwrap();
+            let delay_samples = (sample_rate as f64 * TARGET_DELAY_MS as f64 / 1000.0) as usize;
+
+            if buf.len() < delay_samples {
+                // Not enough data yet (initial buffering)
+                for x in data.iter_mut() { *x = 0.0; }
+                return;
+            }
+
+            for x in data.iter_mut() {
+                *x = buf.pop_front().unwrap_or(0.0);
+            }
+        },
+        |err| log::error!("Playback error: {err}"),
+        None,
+    ).map_err(|e| e.to_string())?;
+
+    stream.play().map_err(|e| e.to_string())?;
+    Ok(AudioStream(vec![stream]))
+}

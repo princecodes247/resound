@@ -37,6 +37,7 @@ time = "=0.3.45"
 # WebSocket signaling relay
 tokio = { version = "1.36.0", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
 axum = { version = "0.7.9", features = ["ws"] }
+tokio-tungstenite = { version = "0.21", features = ["rustls-tls-native-roots"] }
 futures-util = "0.3.32"
 
 # Audio capture

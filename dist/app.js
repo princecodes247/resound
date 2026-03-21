@@ -345,6 +345,12 @@ async function connectAndPlay() {
   if (!sel.value) return;
 
   // 1) Cleanup previous state
+  try {
+    await invoke("stop_receiver");
+  } catch (e) {
+    // Ignore error if not running
+  }
+
   if (receiver.ws) {
     receiver.ws.close();
     receiver.ws = null;
@@ -359,138 +365,22 @@ async function connectAndPlay() {
   const hostInfo = JSON.parse(sel.value);
   receiver.host = hostInfo;
 
-  $("rxStatus").textContent = "Connecting + setting up WebRTC...";
-  log(rxLogEl, `Connecting to ${hostInfo.ip}:${hostInfo.port}`);
+  $("rxStatus").textContent = "Connecting (Native)...";
+  log(rxLogEl, `Connecting to ${hostInfo.ip}:${hostInfo.port} (Native)`);
 
-  receiver.ws = new WebSocket(wsUrlFromIpPort(hostInfo.ip, hostInfo.port));
-  receiver.pc = new RTCPeerConnection();
-
-  const audioEl = $("audio");
-  audioEl.srcObject = null;
-
-  receiver.pc.ontrack = (e) => {
-    const stream = e.streams?.[0];
-    if (!stream) return;
-    audioEl.srcObject = stream;
-    audioEl.play().catch(() => {});
-  };
-
-  receiver.pc.onicecandidate = (e) => {
-    if (!e.candidate) return;
-    receiver.ws.send(
-      JSON.stringify({
-        type: "ice",
-        sessionId: hostInfo.session_id,
-        from: receiver.receiverId,
-        candidate: e.candidate,
-      }),
-    );
-  };
-
-  receiver.pc.onconnectionstatechange = () => {
-    log(rxLogEl, `connectionState=${receiver.pc.connectionState}`);
-  };
-
-  receiver.ws.onmessage = async (evt) => {
-    if (evt.data instanceof Blob) {
-      const arrayBuffer = await evt.data.arrayBuffer();
-      if (arrayBuffer.byteLength < 8) return;
-
-      const dataView = new DataView(arrayBuffer);
-      const hostTimeMs = Number(dataView.getBigUint64(0, true));
-      const hostTimeSec = hostTimeMs / 1000;
-
-      if (!audioCtx) audioCtx = new AudioContext();
-
-      const currentOffset = audioCtx.currentTime - hostTimeSec;
-      if (syncOffset === null || currentOffset < syncOffset) {
-        syncOffset = currentOffset; // Shift sync to the fastest packet (lowest jitter)
-      }
-
-      const floatData = new Float32Array(arrayBuffer, 8);
-      if (floatData.length === 0) return;
-
-      const sampleRate = receiver.host?.sample_rate || 44100;
-      const buffer = audioCtx.createBuffer(1, floatData.length, sampleRate);
-      buffer.getChannelData(0).set(floatData);
-      const source = audioCtx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(audioCtx.destination);
-
-      const playbackTime = hostTimeSec + syncOffset + TARGET_DELAY_MS / 1000;
-
-      if (Math.abs(playbackTime - audioCtx.currentTime) > 1.0) {
-        syncOffset = audioCtx.currentTime - hostTimeSec;
-        nextPlaybackTime = 0; // Reset scheduling on large drift
-      }
-
-      // Seamless scheduling: always start where the previous one ended,
-      // unless we are drifting too far from the host clock.
-      let startAt = Math.max(
-        audioCtx.currentTime,
-        playbackTime,
-        nextPlaybackTime,
-      );
-
-      // Aggressive Sync: If we're more than 30ms behind the host clock, skip ahead.
-      if (startAt > playbackTime + 0.03) {
-        startAt = playbackTime;
-      }
-
-      source.start(startAt);
-      nextPlaybackTime = startAt + buffer.duration;
-      return;
-    }
-
-    let msg;
-    try {
-      msg = JSON.parse(evt.data);
-    } catch {
-      return;
-    }
-
-    if (msg.type === "answer") {
-      log(rxLogEl, "Received answer. Applying remote description...");
-      await receiver.pc.setRemoteDescription(
-        new RTCSessionDescription(msg.answer),
-      );
-    } else if (msg.type === "ice") {
-      if (!msg.candidate) return;
-      await receiver.pc.addIceCandidate(msg.candidate);
-    }
-  };
-
-  // Create offer after websocket open/register
-  await new Promise((resolve) => {
-    receiver.ws.onopen = () => {
-      log(rxLogEl, "WebSocket connected. Registering receiver...");
-      receiver.ws.send(
-        JSON.stringify({
-          type: "register",
-          sessionId: hostInfo.session_id,
-          role: "receiver",
-          clientId: receiver.receiverId,
-        }),
-      );
-      resolve();
-    };
-  });
-
-  const offer = await receiver.pc.createOffer();
-  await receiver.pc.setLocalDescription(offer);
-
-  receiver.ws.send(
-    JSON.stringify({
-      type: "offer",
+  try {
+    await invoke("start_receiver", {
+      hostIp: hostInfo.ip,
+      hostPort: hostInfo.port,
       sessionId: hostInfo.session_id,
-      from: receiver.receiverId,
-      offer: receiver.pc.localDescription,
-    }),
-  );
-
-  $("rxStatus").textContent =
-    "Connected. If you granted audio permissions, playback should start shortly.";
-  log(rxLogEl, "Offer sent. Waiting for remote tracks...");
+      sampleRate: hostInfo.sample_rate || 44100,
+    });
+    $("rxStatus").textContent = "Playing (Native)";
+    log(rxLogEl, "Native audio receiver started.");
+  } catch (err) {
+    $("rxStatus").textContent = `Error: ${err}`;
+    log(rxLogEl, `Native receiver error: ${err}`);
+  }
 }
 
 // ---------- Wire up UI ----------

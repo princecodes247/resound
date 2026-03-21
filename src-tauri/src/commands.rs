@@ -252,3 +252,23 @@ pub async fn stop_host() -> Result<(), String> {
   Ok(())
 }
 
+#[tauri::command]
+pub async fn start_receiver(
+    host_ip: String,
+    host_port: u16,
+    session_id: String,
+    sample_rate: u32,
+) -> Result<(), String> {
+    let wrapped_stream = super::start_native_receiver(host_ip, host_port, session_id, sample_rate).await?;
+    let mut state = SIGNALING_STATE.write().await;
+    state.receiver_stream = Some(wrapped_stream);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_receiver() -> Result<(), String> {
+    let mut state = SIGNALING_STATE.write().await;
+    state.receiver_stream = None;
+    log::info!("Receiver stopped.");
+    Ok(())
+}

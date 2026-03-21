@@ -302,6 +302,8 @@ function resetReceiverUi() {
   receiver.pc = null;
   $("hostSelect").disabled = true;
   $("btnConnect").disabled = true;
+  $("btnConnect").style.display = "inline-block";
+  $("btnDisconnect").style.display = "none";
   $("rxStatus").textContent = "Idle";
   rxLogEl.textContent = "";
 }
@@ -420,11 +422,29 @@ $("btnConnect").addEventListener("click", async () => {
   $("btnConnect").disabled = true;
   try {
     await connectAndPlay();
+    $("btnConnect").style.display = "none";
+    $("btnDisconnect").style.display = "inline-block";
+    $("btnDisconnect").disabled = false;
   } catch (e) {
     console.error(e);
     $("rxStatus").textContent = `Connect error: ${e?.message ?? String(e)}`;
     log(rxLogEl, `ERROR: ${e?.message ?? String(e)}`);
     $("btnConnect").disabled = false;
+  }
+});
+
+$("btnDisconnect").addEventListener("click", async () => {
+  $("btnDisconnect").disabled = true;
+  try {
+    await invoke("stop_receiver");
+    $("rxStatus").textContent = "Disconnected";
+    log(rxLogEl, "Native audio receiver stopped.");
+    $("btnDisconnect").style.display = "none";
+    $("btnConnect").style.display = "inline-block";
+    $("btnConnect").disabled = false;
+  } catch (err) {
+    log(rxLogEl, `Error stopping receiver: ${err}`);
+    $("btnDisconnect").disabled = false;
   }
 });
 

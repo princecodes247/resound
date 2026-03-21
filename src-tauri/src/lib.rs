@@ -173,13 +173,16 @@ pub async fn start_native_audio_capture(
       // Prepend timestamp (8 bytes LE)
       pcm.extend_from_slice(&timestamp.to_le_bytes());
 
-      // Apply digital gain (1.5x) and clamp to avoid clipping
-      let gain = 1.5f32;
+      // Apply digital gain (3.0x) and clamp to avoid clipping
+      let mut peak = 0.0f32;
+      let gain = 3.0f32;
       for &s in data {
+          let abs_s = s.abs();
+          if abs_s > peak { peak = abs_s; }
           let boosted = (s * gain).clamp(-1.0, 1.0);
           pcm.extend_from_slice(&boosted.to_le_bytes());
       }
-      
+
       let packet = pcm;
       // Use channel to broadcast instead of spawning task for every packet.
       // 1024 capacity is more than enough for audio packets.
@@ -513,15 +516,24 @@ pub async fn start_native_receiver(
 
             {
                 let mut buf = playback_buf.lock().unwrap();
-                buf.extend(resampled_samples.iter().copied());
+                
+                // Normalization per packet
+                let max = resampled_samples.iter().fold(0.0f32, |a, &b| a.max(b.abs()));
+                if max > 0.02 {
+                    let norm = (1.0 / max).min(2.0); // Safety cap: max 2x boost from normalization
+                    buf.extend(resampled_samples.iter().map(|s| s * norm));
+                } else {
+                    buf.extend(resampled_samples.iter().copied());
+                }
 
-                // Simple jitter buffer: if we have more than 200ms, drain to TARGET_DELAY
-                // note: this check depends on channels!
+                // Smooth jitter buffer: drain frame-by-frame
                 let delay_samples = (sample_rate as f64 * channels as f64 * TARGET_DELAY_MS as f64 / 1000.0) as usize;
                 let max_buffer = delay_samples + (sample_rate as usize * channels / 10); // +100ms
                 if buf.len() > max_buffer {
                     let to_remove = buf.len() - delay_samples;
-                    buf.drain(0..to_remove);
+                    // Align to frame boundaries (multi-channel)
+                    let aligned_remove = (to_remove / channels) * channels;
+                    buf.drain(0..aligned_remove);
                 }
             }
         }
@@ -539,21 +551,26 @@ pub async fn start_native_receiver(
                 return;
             }
 
+            let output_gain = 1.2f32; // Final stage boost
+
             if host_channels as usize == channels {
                 for x in data.iter_mut() {
-                    *x = buf.pop_front().unwrap_or(0.0);
+                    let s = buf.pop_front().unwrap_or(0.0) * output_gain;
+                    *x = s.clamp(-1.0, 1.0);
                 }
             } else if host_channels == 1 && channels == 2 {
                 // Mono to Stereo: duplicate samples
                 for frame in data.chunks_exact_mut(2) {
-                    let s = buf.pop_front().unwrap_or(0.0);
+                    let s = buf.pop_front().unwrap_or(0.0) * output_gain;
+                    let s = s.clamp(-1.0, 1.0);
                     frame[0] = s;
                     frame[1] = s;
                 }
             } else {
-                // Fallback for other mismatches: just pop as is (might play wrong speed)
+                // Fallback for other mismatches
                 for x in data.iter_mut() {
-                    *x = buf.pop_front().unwrap_or(0.0);
+                    let s = buf.pop_front().unwrap_or(0.0) * output_gain;
+                    *x = s.clamp(-1.0, 1.0);
                 }
             }
         },

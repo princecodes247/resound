@@ -80,7 +80,7 @@ pub async fn start_host(
         monitor.unwrap_or(false), 
         monitor_device, 
         monitor_skip_channels.unwrap_or(0)
-    )?;
+    ).await?;
     (AudioStream(streams), sr)
   };
   SIGNALING_STATE.write().await.audio_stream = Some(wrapped_stream);
@@ -226,12 +226,21 @@ pub async fn stop_host() -> Result<(), String> {
   }
 
   // 2) Stop mDNS
-  *MDNS_DAEMON.lock().unwrap() = None;
+  if let Some(daemon) = MDNS_DAEMON.lock().unwrap().take() {
+    match daemon.shutdown() {
+        Ok(rx) => {
+            let _ = rx.recv_timeout(std::time::Duration::from_millis(500));
+            log::info!("mDNS daemon shut down successfully.");
+        }
+        Err(e) => log::error!("Failed to shut down mDNS daemon: {e}"),
+    }
+  }
 
   // 3) Stop audio capture
   {
     let mut state = SIGNALING_STATE.write().await;
     state.audio_stream = None;
+    state.broadcast_tx = None;
     state.hosts.clear();
     state.receivers.clear();
   }

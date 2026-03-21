@@ -53,6 +53,7 @@ pub(crate) struct RoutingState {
   pub(crate) hosts: HashMap<String, HostConn>,
   pub(crate) receivers: HashMap<String, ReceiverConn>,
   pub(crate) audio_stream: Option<AudioStream>,
+  pub(crate) broadcast_tx: Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>,
 }
 
 fn receiver_key(session_id: &str, receiver_id: &str) -> String {
@@ -74,7 +75,7 @@ pub async fn broadcast_audio_packet(packet: Vec<u8>) {
   }
 }
 
-pub fn start_native_audio_capture(
+pub async fn start_native_audio_capture(
     device_name: Option<String>, 
     monitor: bool,
     monitor_device_name: Option<String>,
@@ -101,6 +102,7 @@ pub fn start_native_audio_capture(
   
   // Dedicated broadcasting task with aggregation
   tokio::spawn(async move {
+      log::info!("Audio broadcasting task started.");
       let mut aggregate_buf = Vec::new();
       let mut first_timestamp = 0u64;
       let target_samples = (sample_rate as usize * 20) / 1000; // 20ms target
@@ -126,7 +128,12 @@ pub fn start_native_audio_capture(
               aggregate_buf.clear();
           }
       }
+      log::info!("Audio broadcasting task stopped.");
   });
+
+  {
+      SIGNALING_STATE.write().await.broadcast_tx = Some(tx_broadcast.clone());
+  }
 
   
   // For local monitoring

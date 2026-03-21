@@ -173,13 +173,11 @@ pub async fn start_native_audio_capture(
       // Prepend timestamp (8 bytes LE)
       pcm.extend_from_slice(&timestamp.to_le_bytes());
 
-      // Faster sample copy using unsafe to treat f32 slice as u8 slice
-      unsafe {
-          let slice_u8: &[u8] = std::slice::from_raw_parts(
-              data.as_ptr() as *const u8,
-              data.len() * std::mem::size_of::<f32>(),
-          );
-          pcm.extend_from_slice(slice_u8);
+      // Apply digital gain (1.5x) and clamp to avoid clipping
+      let gain = 1.5f32;
+      for &s in data {
+          let boosted = (s * gain).clamp(-1.0, 1.0);
+          pcm.extend_from_slice(&boosted.to_le_bytes());
       }
       
       let packet = pcm;

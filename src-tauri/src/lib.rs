@@ -15,7 +15,7 @@ use futures_util::stream::StreamExt;
 
 pub(crate) const SERVICE_TYPE: &str = "_resound-audio._tcp.local.";
 pub(crate) const WS_PATH: &str = "/ws";
-pub(crate) const TARGET_DELAY_MS: u32 = 200;
+pub(crate) const TARGET_DELAY_MS: u32 = 100;
 
 mod commands;
 

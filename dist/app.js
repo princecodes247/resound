@@ -52,7 +52,7 @@ let host = {
 let audioCtx = null;
 let nextPlaybackTime = 0;
 let syncOffset = null; // Host relative sync offset
-const TARGET_DELAY_MS = 200;
+const TARGET_DELAY_MS = 100;
 
 async function populateDevices() {
   const sel = $("deviceSelect");
@@ -419,8 +419,8 @@ async function connectAndPlay() {
         nextPlaybackTime,
       );
 
-      // If we're more than 100ms behind the host clock, skip ahead.
-      if (startAt > playbackTime + 0.1) {
+      // If we're more than 50ms behind the host clock, skip ahead.
+      if (startAt > playbackTime + 0.05) {
         startAt = playbackTime;
       }
 

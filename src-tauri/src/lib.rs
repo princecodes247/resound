@@ -92,7 +92,7 @@ pub async fn start_native_audio_capture(
     monitor: bool,
     monitor_device_name: Option<String>,
     monitor_skip_channels: u16,
-) -> Result<(Vec<cpal::Stream>, u32), String> {
+) -> Result<(Vec<cpal::Stream>, u32, u16), String> {
   use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
   let host = cpal::default_host();
   let device = if let Some(name) = device_name {
@@ -281,7 +281,7 @@ pub async fn start_native_audio_capture(
   }
 
   streams[0].play().map_err(|e| e.to_string())?;
-  Ok((streams, sample_rate))
+  Ok((streams, sample_rate, channels))
 }
 async fn websocket_handler(ws: WebSocketUpgrade) -> impl axum::response::IntoResponse {
   ws.on_upgrade(move |socket| async move {
@@ -464,6 +464,9 @@ pub async fn start_native_receiver(
         let mut sync_offset: Option<f64> = None;
         let start_instant = std::time::Instant::now();
         let mut packets_received = 0;
+        let resample_ratio = sample_rate as f64 / _sample_rate as f64;
+        let mut last_host_frame: Vec<f32> = Vec::new();
+        let mut resample_phase: f64 = 0.0;
 
         while let Some(msg) = read.next().await {
             let data = match msg {
@@ -474,7 +477,7 @@ pub async fn start_native_receiver(
             if data.len() < 8 { continue; }
 
             if packets_received % 50 == 0 {
-                writeln!(log_file_clone, "Received packet {}, data len {}", packets_received, data.len()).unwrap();
+                let _ = writeln!(log_file_clone, "Received packet {}, data len {}", packets_received, data.len());
             }
 
             let host_time_ms = u64::from_le_bytes(data[0..8].try_into().unwrap_or([0; 8]));
@@ -487,20 +490,39 @@ pub async fn start_native_receiver(
                 sync_offset = Some(current_offset);
             }
 
-            let samples = &data[8..];
-            let float_samples: Vec<f32> = samples.chunks_exact(4)
+            let samples_bytes = &data[8..];
+            let float_samples: Vec<f32> = samples_bytes.chunks_exact(4)
                 .map(|c| f32::from_le_bytes(c.try_into().unwrap()))
                 .collect();
 
-            {
-                let mut buf = playback_buf.lock().unwrap();
-                buf.extend(float_samples);
+            let host_chan = host_channels as usize;
+            let mut resampled_samples = Vec::with_capacity((float_samples.len() as f64 * resample_ratio) as usize + host_chan);
 
-                if buf.len() % 1000 < 50 {
-                    // Log periodically
+            for frame in float_samples.chunks_exact(host_chan) {
+                if last_host_frame.is_empty() {
+                    last_host_frame = frame.to_vec();
+                    continue;
                 }
 
+                while resample_phase < 1.0 {
+                    for c in 0..host_chan {
+                        let prev = last_host_frame[c];
+                        let curr = frame[c];
+                        let interpolated = prev + (curr - prev) * resample_phase as f32;
+                        resampled_samples.push(interpolated);
+                    }
+                    resample_phase += 1.0 / resample_ratio;
+                }
+                resample_phase -= 1.0;
+                last_host_frame.copy_from_slice(frame);
+            }
+
+            {
+                let mut buf = playback_buf.lock().unwrap();
+                buf.extend(resampled_samples);
+
                 // Simple jitter buffer: if we have more than 200ms, drain to TARGET_DELAY
+                // note: this check depends on channels!
                 let delay_samples = (sample_rate as f64 * channels as f64 * TARGET_DELAY_MS as f64 / 1000.0) as usize;
                 let max_buffer = delay_samples + (sample_rate as usize * channels / 10); // +100ms
                 if buf.len() > max_buffer {

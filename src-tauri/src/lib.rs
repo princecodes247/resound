@@ -99,10 +99,32 @@ pub fn start_native_audio_capture(
 
   let (tx_broadcast, mut rx_broadcast) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
   
-  // Dedicated broadcasting task
+  // Dedicated broadcasting task with aggregation
   tokio::spawn(async move {
+      let mut aggregate_buf = Vec::new();
+      let mut first_timestamp = 0u64;
+      let target_samples = (sample_rate as usize * 20) / 1000; // 20ms target
+
       while let Some(packet) = rx_broadcast.recv().await {
-          broadcast_audio_packet(packet).await;
+          if packet.len() < 8 { continue; }
+          
+          let timestamp = u64::from_le_bytes(packet[0..8].try_into().unwrap_or([0; 8]));
+          let samples = &packet[8..];
+
+          if aggregate_buf.is_empty() {
+              first_timestamp = timestamp;
+          }
+
+          aggregate_buf.extend_from_slice(samples);
+
+          if aggregate_buf.len() / 4 >= target_samples {
+              let mut final_packet = Vec::with_capacity(8 + aggregate_buf.len());
+              final_packet.extend_from_slice(&first_timestamp.to_le_bytes());
+              final_packet.extend_from_slice(&aggregate_buf);
+              
+              broadcast_audio_packet(final_packet).await;
+              aggregate_buf.clear();
+          }
       }
   });
 

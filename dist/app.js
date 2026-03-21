@@ -408,9 +408,24 @@ async function connectAndPlay() {
 
       if (Math.abs(playbackTime - audioCtx.currentTime) > 1.0) {
         syncOffset = audioCtx.currentTime - hostTimeSec;
+        nextPlaybackTime = 0; // Reset scheduling on large drift
       }
 
-      source.start(Math.max(audioCtx.currentTime, playbackTime));
+      // Seamless scheduling: always start where the previous one ended,
+      // unless we are drifting too far from the host clock.
+      let startAt = Math.max(
+        audioCtx.currentTime,
+        playbackTime,
+        nextPlaybackTime,
+      );
+
+      // If we're more than 100ms behind the host clock, skip ahead.
+      if (startAt > playbackTime + 0.1) {
+        startAt = playbackTime;
+      }
+
+      source.start(startAt);
+      nextPlaybackTime = startAt + buffer.duration;
       return;
     }
 

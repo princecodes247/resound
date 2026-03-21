@@ -1,7 +1,6 @@
 use std::{
   collections::{HashMap, VecDeque},
   sync::{Arc, LazyLock, Mutex},
-  io::Write,
 };
 
 use axum::extract::{
@@ -135,8 +134,8 @@ pub async fn start_native_audio_capture(
           let frame_size = 4 * channels as usize;
           if aggregate_buf.len() >= target_samples * frame_size {
               let mut final_packet = Vec::with_capacity(8 + aggregate_buf.len());
-              let _ = final_packet.write_all(&first_timestamp.to_le_bytes());
-              let _ = final_packet.write_all(&aggregate_buf);
+              final_packet.extend_from_slice(&first_timestamp.to_le_bytes());
+              final_packet.extend_from_slice(&aggregate_buf);
               
               broadcast_audio_packet(final_packet).await;
               aggregate_buf.clear();
@@ -171,10 +170,10 @@ pub async fn start_native_audio_capture(
 
       let mut pcm = Vec::with_capacity(8 + data.len() * 4);
       // Prepend timestamp (8 bytes LE)
-      let _ = pcm.write_all(&timestamp.to_le_bytes());
+      pcm.extend_from_slice(&timestamp.to_le_bytes());
 
       for &sample in data {
-        let _ = pcm.write_all(&sample.to_le_bytes());
+        pcm.extend_from_slice(&sample.to_le_bytes());
       }
       
       let packet = pcm;
@@ -429,12 +428,11 @@ pub async fn start_native_receiver(
     use futures_util::sink::SinkExt; // Added sink::SinkExt
     use futures_util::stream::StreamExt;
 
-    let mut log_file = std::fs::File::create("receiver_log.txt").unwrap();
-    writeln!(log_file, "Native receiver starting...").unwrap();
+    log::info!("Native receiver starting...");
 
     let ws_url = format!("ws://{host_ip}:{host_port}{WS_PATH}");
     let (ws_stream, _) = connect_async(ws_url).await.map_err(|e| e.to_string())?;
-    writeln!(log_file, "WebSocket connected").unwrap();
+    log::info!("WebSocket connected");
     let (mut write, mut read) = ws_stream.split();
 
     // 1) Register as receiver
@@ -445,7 +443,7 @@ pub async fn start_native_receiver(
         "clientId": "native-rust-receiver",
     });
     write.send(TMessage::Text(reg.to_string())).await.map_err(|e| e.to_string())?;
-    writeln!(log_file, "Registration sent").unwrap();
+    log::info!("Registration sent");
 
     let host = cpal::default_host();
     let device = host.default_output_device().ok_or("No default output device found")?;
@@ -453,11 +451,10 @@ pub async fn start_native_receiver(
     let sample_rate = config.sample_rate().0;
     let channels = config.channels() as usize;
 
-    writeln!(log_file, "Device: {}, Sample Rate: {}, Channels: {}", device.name().unwrap_or_default(), sample_rate, channels).unwrap();
+    log::info!("Device: {}, Sample Rate: {}, Channels: {}", device.name().unwrap_or_default(), sample_rate, channels);
     
     let playback_buf = Arc::new(Mutex::new(VecDeque::<f32>::new()));
     let playback_buf_clone = playback_buf.clone();
-    let mut log_file_clone = log_file.try_clone().unwrap();
 
     // High-performance playback task
     tokio::spawn(async move {
@@ -477,7 +474,7 @@ pub async fn start_native_receiver(
             if data.len() < 8 { continue; }
 
             if packets_received % 50 == 0 {
-                let _ = writeln!(log_file_clone, "Received packet {}, data len {}", packets_received, data.len());
+                log::info!("Received packet {}, data len {}", packets_received, data.len());
             }
 
             let host_time_ms = u64::from_le_bytes(data[0..8].try_into().unwrap_or([0; 8]));
@@ -534,19 +531,11 @@ pub async fn start_native_receiver(
         log::info!("Receiver WebSocket task stopped.");
     });
 
-    let mut log_file_clone_2 = log_file.try_clone().unwrap();
-    let mut callback_count = 0;
-
     let stream = device.build_output_stream(
         &config.into(),
         move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
             let mut buf = playback_buf_clone.lock().unwrap();
             let delay_samples = (sample_rate as f64 * channels as f64 * TARGET_DELAY_MS as f64 / 1000.0) as usize;
-            callback_count += 1;
-
-            if callback_count % 200 == 0 {
-                let _ = writeln!(log_file_clone_2, "Callback {}, buf len {}", callback_count, buf.len());
-            }
 
             if buf.len() < delay_samples {
                 for x in data.iter_mut() { *x = 0.0; }

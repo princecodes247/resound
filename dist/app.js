@@ -374,6 +374,7 @@ async function connectAndPlay() {
       hostPort: hostInfo.port,
       sessionId: hostInfo.session_id,
       sampleRate: hostInfo.sample_rate || 44100,
+      channels: hostInfo.channels || 2,
     });
     $("rxStatus").textContent = "Playing (Native)";
     log(rxLogEl, "Native audio receiver started.");

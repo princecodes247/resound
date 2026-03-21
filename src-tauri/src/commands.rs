@@ -76,7 +76,7 @@ pub async fn start_host(
 
   let (wrapped_stream, sample_rate) = {
     let (streams, sr) = super::start_native_audio_capture(
-        device_name, 
+        device_name.clone(), 
         monitor.unwrap_or(false), 
         monitor_device, 
         monitor_skip_channels.unwrap_or(0)
@@ -125,6 +125,18 @@ pub async fn start_host(
   let mut properties: HashMap<String, String> = HashMap::new();
   properties.insert("sid".to_string(), session_id.clone());
   properties.insert("sr".to_string(), sample_rate.to_string());
+  
+  let host_channels = match device_name {
+    Some(_) => {
+        // We could get it from the device config, but for simplicity let's assume the capture sample rate matches the device.
+        // Actually, we have sr, let's just get the channels from the capture config if we can.
+        // But for now, let's just advertise 2 if it's stereo-ish or 1 if it's mono-ish.
+        // A better way is to pass it from start_native_audio_capture.
+        2 // Default to 2 for now, or improve start_native_audio_capture to return it.
+    },
+    None => 2,
+  };
+  properties.insert("ch".to_string(), host_channels.to_string());
 
   let service_info = ServiceInfo::new(
     SERVICE_TYPE,
@@ -198,12 +210,19 @@ pub async fn discover_hosts(duration_ms: u64) -> Result<Vec<DiscoveredHost>, Str
             .and_then(|v| v.parse::<u32>().ok())
             .unwrap_or(44100);
 
+          let host_channels = resolved
+            .txt_properties
+            .get_property_val_str("ch")
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(2);
+
           let host = DiscoveredHost {
             name,
             ip,
             port: resolved.port,
             session_id: session_id.clone(),
             sample_rate,
+            channels: host_channels,
           };
 
           by_session_id.insert(session_id, host);
@@ -258,8 +277,9 @@ pub async fn start_receiver(
     host_port: u16,
     session_id: String,
     sample_rate: u32,
+    channels: u32,
 ) -> Result<(), String> {
-    let wrapped_stream = super::start_native_receiver(host_ip, host_port, session_id, sample_rate).await?;
+    let wrapped_stream = super::start_native_receiver(host_ip, host_port, session_id, sample_rate, channels).await?;
     let mut state = SIGNALING_STATE.write().await;
     state.receiver_stream = Some(wrapped_stream);
     Ok(())

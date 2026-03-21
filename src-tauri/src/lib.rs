@@ -138,9 +138,10 @@ pub fn start_native_audio_capture(device_name: Option<String>, monitor: bool) ->
   if monitor {
       let output_device = host.default_output_device().ok_or("No default output device found for monitoring")?;
       
-      // Try to find a config that matches the input sample rate
+      // Try to find a config that matches the input sample rate and is F32
       let output_config = output_device.supported_output_configs()
           .map_err(|e| e.to_string())?
+          .filter(|c| c.sample_format() == cpal::SampleFormat::F32)
           .filter_map(|c| {
               if c.min_sample_rate().0 <= sample_rate && c.max_sample_rate().0 >= sample_rate {
                   Some(c.with_sample_rate(cpal::SampleRate(sample_rate)))
@@ -156,6 +157,8 @@ pub fn start_native_audio_capture(device_name: Option<String>, monitor: bool) ->
                   .map(|c| c.into())
           })?;
 
+      log::info!("Starting host monitor on {:?} using config {:?}", output_device.name().ok(), output_config);
+
       let output_channels = output_config.channels();
       let output_monitor_buffer = monitor_buffer.unwrap();
 
@@ -163,6 +166,14 @@ pub fn start_native_audio_capture(device_name: Option<String>, monitor: bool) ->
           &output_config.into(),
           move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
               if let Ok(mut buf) = output_monitor_buffer.lock() {
+                  // Add a small pre-buffer to prevent stuttering
+                  if buf.len() < 512 {
+                      for s in data.iter_mut() {
+                          *s = 0.0;
+                      }
+                      return;
+                  }
+
                   for frame in data.chunks_mut(output_channels as usize) {
                       let sample = buf.pop_front().unwrap_or(0.0);
                       for s in frame.iter_mut() {

@@ -97,7 +97,15 @@ pub fn start_native_audio_capture(
   let channels = config.channels();
   let sample_rate = config.sample_rate().0;
 
-  let handle = tokio::runtime::Handle::current();
+  let (tx_broadcast, mut rx_broadcast) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+  
+  // Dedicated broadcasting task
+  tokio::spawn(async move {
+      while let Some(packet) = rx_broadcast.recv().await {
+          broadcast_audio_packet(packet).await;
+      }
+  });
+
   
   // For local monitoring
   let monitor_buffer = if monitor {
@@ -128,9 +136,9 @@ pub fn start_native_audio_capture(
       }
       
       let packet = pcm;
-      handle.spawn(async move {
-        broadcast_audio_packet(packet).await;
-      });
+      // Use channel to broadcast instead of spawning task for every packet.
+      // 1024 capacity is more than enough for audio packets.
+      let _ = tx_broadcast.send(packet);
 
       // 2) Forward to local monitor buffer if enabled
       if let Some(ref buf_arc) = input_monitor_buffer {

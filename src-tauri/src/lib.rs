@@ -44,6 +44,16 @@ struct ReceiverConn {
 
 pub(crate) struct AudioStream(#[allow(dead_code)] pub(crate) Vec<cpal::Stream>);
 
+impl Drop for AudioStream {
+    fn drop(&mut self) {
+        use cpal::traits::StreamTrait;
+        log::info!("AudioStream being dropped, stopping {} streams", self.0.len());
+        for stream in &self.0 {
+            let _ = stream.pause();
+        }
+    }
+}
+
 // Safety: cpal::Stream is Send/Sync on most platforms.
 unsafe impl Send for AudioStream {}
 unsafe impl Sync for AudioStream {}

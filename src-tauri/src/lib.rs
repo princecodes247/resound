@@ -140,9 +140,12 @@ pub fn start_native_audio_capture(
                   buf.push_back(chunk[0]);
               }
               // Prevent buffer from growing indefinitely (latency). 
-              // 2048 samples at 48kHz is ~40ms, which is a good balance.
-              if buf.len() > 2048 {
-                  let to_remove = buf.len() - 1024; // Drain down to 1024
+              // 8192 samples at 48kHz is ~170ms. 
+              // We need enough for TARGET_DELAY_MS (200ms) plus some headroom.
+              // Let's allow up to 400ms (19200 samples at 48kHz).
+              let max_buffered = (sample_rate as usize * 400) / 1000;
+              if buf.len() > max_buffered {
+                  let to_remove = buf.len() - (max_buffered / 2); 
                   buf.drain(0..to_remove);
               }
           }

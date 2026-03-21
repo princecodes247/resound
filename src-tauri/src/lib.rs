@@ -126,9 +126,10 @@ pub fn start_native_audio_capture(
               for chunk in data.chunks(channels as usize) {
                   buf.push_back(chunk[0]);
               }
-              // Prevent buffer from growing indefinitely if output is slow
-              if buf.len() > 16384 {
-                  let to_remove = buf.len() - 16384;
+              // Prevent buffer from growing indefinitely (latency). 
+              // 2048 samples at 48kHz is ~40ms, which is a good balance.
+              if buf.len() > 2048 {
+                  let to_remove = buf.len() - 1024; // Drain down to 1024
                   buf.drain(0..to_remove);
               }
           }

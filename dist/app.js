@@ -392,7 +392,12 @@ async function connectAndPlay() {
       source.buffer = buffer;
       source.connect(audioCtx.destination);
 
-      const startTime = Math.max(audioCtx.currentTime, nextPlaybackTime);
+      // Latency snapping: if scheduled too far ahead (>200ms), skip the lag
+      let startTime = Math.max(audioCtx.currentTime, nextPlaybackTime);
+      if (startTime > audioCtx.currentTime + 0.2) {
+        startTime = audioCtx.currentTime;
+      }
+
       source.start(startTime);
       nextPlaybackTime = startTime + buffer.duration;
       return;

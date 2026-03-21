@@ -157,12 +157,13 @@ pub async fn start_native_audio_capture(
   };
 
   let input_monitor_buffer = monitor_buffer.clone();
+  let host_start = *HOST_START_TIME.lock().unwrap();
   
   let input_stream = device.build_input_stream(
     &config.into(),
     move |data: &[f32], _: &cpal::InputCallbackInfo| {
       // 1) Forward to receivers with timestamp
-      let timestamp = if let Some(start) = *HOST_START_TIME.lock().unwrap() {
+      let timestamp = if let Some(start) = host_start {
           start.elapsed().as_millis() as u64
       } else {
           0
@@ -172,8 +173,13 @@ pub async fn start_native_audio_capture(
       // Prepend timestamp (8 bytes LE)
       pcm.extend_from_slice(&timestamp.to_le_bytes());
 
-      for &sample in data {
-        pcm.extend_from_slice(&sample.to_le_bytes());
+      // Faster sample copy using unsafe to treat f32 slice as u8 slice
+      unsafe {
+          let slice_u8: &[u8] = std::slice::from_raw_parts(
+              data.as_ptr() as *const u8,
+              data.len() * std::mem::size_of::<f32>(),
+          );
+          pcm.extend_from_slice(slice_u8);
       }
       
       let packet = pcm;
@@ -423,16 +429,15 @@ pub async fn start_native_receiver(
     host_channels: u32,
 ) -> Result<AudioStream, String> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-    use tokio_tungstenite::connect_async;
     use tokio_tungstenite::tungstenite::protocol::Message as TMessage;
     use futures_util::sink::SinkExt; // Added sink::SinkExt
     use futures_util::stream::StreamExt;
-
-    log::info!("Native receiver starting...");
+    let addr = format!("{host_ip}:{host_port}");
+    let tcp_stream = tokio::net::TcpStream::connect(addr).await.map_err(|e| e.to_string())?;
+    tcp_stream.set_nodelay(true).map_err(|e| e.to_string())?;
 
     let ws_url = format!("ws://{host_ip}:{host_port}{WS_PATH}");
-    let (ws_stream, _) = connect_async(ws_url).await.map_err(|e| e.to_string())?;
-    log::info!("WebSocket connected");
+    let (ws_stream, _) = tokio_tungstenite::client_async(ws_url, tcp_stream).await.map_err(|e| e.to_string())?;
     let (mut write, mut read) = ws_stream.split();
 
     // 1) Register as receiver
@@ -443,7 +448,6 @@ pub async fn start_native_receiver(
         "clientId": "native-rust-receiver",
     });
     write.send(TMessage::Text(reg.to_string())).await.map_err(|e| e.to_string())?;
-    log::info!("Registration sent");
 
     let host = cpal::default_host();
     let device = host.default_output_device().ok_or("No default output device found")?;
@@ -451,7 +455,7 @@ pub async fn start_native_receiver(
     let sample_rate = config.sample_rate().0;
     let channels = config.channels() as usize;
 
-    log::info!("Device: {}, Sample Rate: {}, Channels: {}", device.name().unwrap_or_default(), sample_rate, channels);
+    log::info!("Native receiver started: {} ({}Hz, {}ch)", device.name().unwrap_or_default(), sample_rate, channels);
     
     let playback_buf = Arc::new(Mutex::new(VecDeque::<f32>::new()));
     let playback_buf_clone = playback_buf.clone();
@@ -460,22 +464,17 @@ pub async fn start_native_receiver(
     tokio::spawn(async move {
         let mut sync_offset: Option<f64> = None;
         let start_instant = std::time::Instant::now();
-        let mut packets_received = 0;
         let resample_ratio = sample_rate as f64 / _sample_rate as f64;
         let mut last_host_frame: Vec<f32> = Vec::new();
         let mut resample_phase: f64 = 0.0;
+        let mut resampled_samples = Vec::with_capacity(2048);
 
         while let Some(msg) = read.next().await {
             let data = match msg {
                 Ok(TMessage::Binary(d)) => d,
                 _ => continue,
             };
-            packets_received += 1;
             if data.len() < 8 { continue; }
-
-            if packets_received % 50 == 0 {
-                log::info!("Received packet {}, data len {}", packets_received, data.len());
-            }
 
             let host_time_ms = u64::from_le_bytes(data[0..8].try_into().unwrap_or([0; 8]));
             let host_time_sec = host_time_ms as f64 / 1000.0;
@@ -493,7 +492,7 @@ pub async fn start_native_receiver(
                 .collect();
 
             let host_chan = host_channels as usize;
-            let mut resampled_samples = Vec::with_capacity((float_samples.len() as f64 * resample_ratio) as usize + host_chan);
+            resampled_samples.clear();
 
             for frame in float_samples.chunks_exact(host_chan) {
                 if last_host_frame.is_empty() {
@@ -516,7 +515,7 @@ pub async fn start_native_receiver(
 
             {
                 let mut buf = playback_buf.lock().unwrap();
-                buf.extend(resampled_samples);
+                buf.extend(resampled_samples.iter().copied());
 
                 // Simple jitter buffer: if we have more than 200ms, drain to TARGET_DELAY
                 // note: this check depends on channels!

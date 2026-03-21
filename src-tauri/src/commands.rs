@@ -37,10 +37,30 @@ pub fn list_audio_devices() -> Result<Vec<AudioDevice>, String> {
   Ok(list)
 }
 
+#[tauri::command]
+pub fn list_output_devices() -> Result<Vec<AudioDevice>, String> {
+  let host = cpal::default_host();
+  let devices = host.output_devices().map_err(|e| e.to_string())?;
+  let list: Vec<AudioDevice> = devices
+    .into_iter()
+    .filter_map(|d| d.name().ok())
+    .map(|name| {
+      AudioDevice { name, is_loopback: false }
+    })
+    .collect();
+  Ok(list)
+}
+
 
 
 #[tauri::command]
-pub async fn start_host(session_id: String, device_name: Option<String>, monitor: Option<bool>) -> Result<u16, String> {
+pub async fn start_host(
+    session_id: String, 
+    device_name: Option<String>, 
+    monitor: Option<bool>, 
+    monitor_device: Option<String>,
+    monitor_skip_channels: Option<u16>
+) -> Result<u16, String> {
   // Keep session id stable for this app instance.
   {
     let mut guard = STARTED_SESSION_ID.lock().unwrap();
@@ -55,7 +75,12 @@ pub async fn start_host(session_id: String, device_name: Option<String>, monitor
   }
 
   let (wrapped_stream, sample_rate) = {
-    let (streams, sr) = super::start_native_audio_capture(device_name, monitor.unwrap_or(false))?;
+    let (streams, sr) = super::start_native_audio_capture(
+        device_name, 
+        monitor.unwrap_or(false), 
+        monitor_device, 
+        monitor_skip_channels.unwrap_or(0)
+    )?;
     (AudioStream(streams), sr)
   };
   SIGNALING_STATE.write().await.audio_stream = Some(wrapped_stream);

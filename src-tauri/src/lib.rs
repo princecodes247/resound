@@ -72,7 +72,12 @@ pub async fn broadcast_audio_packet(packet: Vec<u8>) {
   }
 }
 
-pub fn start_native_audio_capture(device_name: Option<String>, monitor: bool) -> Result<(Vec<cpal::Stream>, u32), String> {
+pub fn start_native_audio_capture(
+    device_name: Option<String>, 
+    monitor: bool,
+    monitor_device_name: Option<String>,
+    monitor_skip_channels: u16,
+) -> Result<(Vec<cpal::Stream>, u32), String> {
   use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
   let host = cpal::default_host();
   let device = if let Some(name) = device_name {
@@ -136,7 +141,14 @@ pub fn start_native_audio_capture(device_name: Option<String>, monitor: bool) ->
   let mut streams = vec![input_stream];
 
   if monitor {
-      let output_device = host.default_output_device().ok_or("No default output device found for monitoring")?;
+      let output_device = if let Some(name) = monitor_device_name {
+          host.output_devices()
+              .map_err(|e| e.to_string())?
+              .find(|d| d.name().ok().as_deref() == Some(&name))
+              .ok_or_else(|| format!("Monitor output device not found: {name}"))?
+      } else {
+          host.default_output_device().ok_or("No default output device found for monitoring")?
+      };
       
       // Try to find a config that matches the input sample rate and is F32
       let output_config = output_device.supported_output_configs()
@@ -176,8 +188,12 @@ pub fn start_native_audio_capture(device_name: Option<String>, monitor: bool) ->
 
                   for frame in data.chunks_mut(output_channels as usize) {
                       let sample = buf.pop_front().unwrap_or(0.0);
-                      for s in frame.iter_mut() {
-                          *s = sample;
+                      for (i, s) in frame.iter_mut().enumerate() {
+                          if i >= monitor_skip_channels as usize {
+                              *s = sample;
+                          } else {
+                              *s = 0.0;
+                          }
                       }
                   }
               }
@@ -305,7 +321,8 @@ pub fn run() {
       commands::start_host,
       commands::stop_host,
       commands::discover_hosts,
-      commands::list_audio_devices
+      commands::list_audio_devices,
+      commands::list_output_devices
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

@@ -81,6 +81,25 @@ async function populateDevices() {
   }
 }
 
+async function populateOutputDevices() {
+  const sel = $("monitorDeviceSelect");
+  try {
+    const devices = await invoke("list_output_devices", {});
+    sel.innerHTML = '<option value="">Default Output</option>';
+    devices.forEach((d) => {
+      const opt = document.createElement("option");
+      opt.value = d.name;
+      opt.textContent = d.name;
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    console.error("Failed to list output devices:", e);
+  }
+}
+
+populateDevices();
+populateOutputDevices();
+
 function createSystemAudioTip() {
   const tip = document.createElement("div");
   tip.id = "systemAudioTip";
@@ -91,8 +110,6 @@ function createSystemAudioTip() {
   $("deviceSelect").parentNode.appendChild(tip);
   return tip;
 }
-
-populateDevices();
 
 // ---------- Host state ----------
 
@@ -106,11 +123,13 @@ async function startHost() {
 
   const deviceName = $("deviceSelect").value || null;
   const monitor = $("monitorCheckbox").checked;
+  const monitorDevice = $("monitorDeviceSelect").value || null;
+  const monitorSkipChannels = parseInt($("monitorSkipChannels").value) || 0;
 
   // 1) Start signaling + mDNS + Native Capture (Rust)
   log(
     hostLogEl,
-    `Starting host with device=${deviceName || "default"} monitor=${monitor}...`,
+    `Starting host with device=${deviceName || "default"} monitor=${monitor} (skip=${monitorSkipChannels})...`,
   );
   const port = await invoke("start_host", {
     session_id: host.sessionId,
@@ -118,6 +137,10 @@ async function startHost() {
     device_name: deviceName,
     deviceName: deviceName,
     monitor: monitor,
+    monitor_device: monitorDevice,
+    monitorDevice: monitorDevice,
+    monitor_skip_channels: monitorSkipChannels,
+    monitorSkipChannels: monitorSkipChannels,
   });
   host.signalingPort = port;
   $("hostStatus").textContent =
@@ -468,4 +491,8 @@ $("btnConnect").addEventListener("click", async () => {
     log(rxLogEl, `ERROR: ${e?.message ?? String(e)}`);
     $("btnConnect").disabled = false;
   }
+});
+
+$("monitorCheckbox").addEventListener("change", (e) => {
+  $("monitorSettings").style.display = e.target.checked ? "block" : "none";
 });

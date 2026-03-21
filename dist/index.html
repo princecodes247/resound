@@ -118,6 +118,30 @@
           </label>
         </div>
 
+        <div
+          id="monitorSettings"
+          style="margin-left: 24px; font-size: 13px; color: #555"
+        >
+          <div class="field">
+            Monitor Device:
+            <select
+              id="monitorDeviceSelect"
+              style="margin-top: 4px; padding: 4px 8px; font-size: 12px"
+            ></select>
+          </div>
+          <div class="field">
+            Skip first
+            <input
+              type="number"
+              id="monitorSkipChannels"
+              value="0"
+              min="0"
+              style="width: 40px; padding: 4px; font-size: 12px"
+            />
+            channels (to avoid feedback)
+          </div>
+        </div>
+
         <div class="field">
           Session ID: <code id="hostSessionId">not started</code>
         </div>

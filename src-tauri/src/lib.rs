@@ -15,7 +15,7 @@ use futures_util::stream::StreamExt;
 
 pub(crate) const SERVICE_TYPE: &str = "_resound-audio._tcp.local.";
 pub(crate) const WS_PATH: &str = "/ws";
-pub(crate) const TARGET_DELAY_MS: u32 = 100;
+pub(crate) const TARGET_DELAY_MS: u32 = 50;
 
 mod commands;
 
@@ -115,7 +115,7 @@ pub async fn start_native_audio_capture(
       log::info!("Audio broadcasting task started.");
       let mut aggregate_buf = Vec::new();
       let mut first_timestamp = 0u64;
-      let target_samples = (sample_rate as usize * 20) / 1000; // 20ms target
+      let target_samples = (sample_rate as usize * 10) / 1000; // 10ms target
 
       while let Some(packet) = rx_broadcast.recv().await {
           if packet.len() < 8 { continue; }

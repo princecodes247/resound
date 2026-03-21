@@ -52,7 +52,7 @@ let host = {
 let audioCtx = null;
 let nextPlaybackTime = 0;
 let syncOffset = null; // Host relative sync offset
-const TARGET_DELAY_MS = 100;
+const TARGET_DELAY_MS = 50;
 
 async function populateDevices() {
   const sel = $("deviceSelect");
@@ -390,8 +390,9 @@ async function connectAndPlay() {
 
       if (!audioCtx) audioCtx = new AudioContext();
 
-      if (syncOffset === null) {
-        syncOffset = audioCtx.currentTime - hostTimeSec;
+      const currentOffset = audioCtx.currentTime - hostTimeSec;
+      if (syncOffset === null || currentOffset < syncOffset) {
+        syncOffset = currentOffset; // Shift sync to the fastest packet (lowest jitter)
       }
 
       const floatData = new Float32Array(arrayBuffer, 8);
@@ -419,8 +420,8 @@ async function connectAndPlay() {
         nextPlaybackTime,
       );
 
-      // If we're more than 50ms behind the host clock, skip ahead.
-      if (startAt > playbackTime + 0.05) {
+      // Aggressive Sync: If we're more than 30ms behind the host clock, skip ahead.
+      if (startAt > playbackTime + 0.03) {
         startAt = playbackTime;
       }
 

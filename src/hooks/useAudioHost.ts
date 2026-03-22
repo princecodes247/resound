@@ -36,6 +36,7 @@ export const useAudioHost = () => {
 
   const startHost = async (config: {
     deviceName: string | null;
+    name: string | null;
     monitor: boolean;
     monitorDevice: string | null;
     monitorSkipChannels: number;
@@ -56,6 +57,7 @@ export const useAudioHost = () => {
         sessionId: newSessionId,
         device_name: config.deviceName,
         deviceName: config.deviceName,
+        name: config.name,
         monitorLength: config.monitor,
         monitor: config.monitor,
         monitor_device: config.monitorDevice,

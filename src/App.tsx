@@ -21,6 +21,7 @@ export default function App() {
 
     // Settings State
     const [showSettings, setShowSettings] = useState(false);
+    const [broadcastName, setBroadcastName] = useState(() => `Resound ${Math.floor(Math.random() * 1000)}`);
     const [selectedDevice, setSelectedDevice] = useState('');
     const [monitorDevice, setMonitorDevice] = useState('');
     const [monitorGain, setMonitorGain] = useState(1.0);
@@ -111,6 +112,8 @@ export default function App() {
                             <BroadcastView
                                 key="broadcast"
                                 host={host}
+                                broadcastName={broadcastName}
+                                setBroadcastName={setBroadcastName}
                                 selectedDevice={selectedDevice}
                                 setSelectedDevice={setSelectedDevice}
                                 monitorDevice={monitorDevice}
@@ -208,12 +211,13 @@ function SettingsSlider({ label, value, onChange }: { label: string, value: numb
     );
 }
 
-function BroadcastView({ host, selectedDevice, setSelectedDevice, monitorDevice, monitorGain, broadcastGain }: any) {
+function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, setSelectedDevice, monitorDevice, monitorGain, broadcastGain }: any) {
     const isBroadcasting = host.status === 'broadcasting';
 
     const handleStart = () => {
         host.startHost({
             deviceName: selectedDevice || null,
+            name: broadcastName || null,
             monitor: monitorDevice !== '',
             monitorDevice: monitorDevice || null,
             monitorSkipChannels: 0,
@@ -229,8 +233,15 @@ function BroadcastView({ host, selectedDevice, setSelectedDevice, monitorDevice,
             exit={{ opacity: 0, y: -10 }}
             className="flex flex-col items-center"
         >
-            <div className="mb-10 text-center">
-                <h2 className="text-xl font-medium text-white mb-2">Share Audio</h2>
+            <div className="mb-10 text-center w-full">
+                <input
+                    type="text"
+                    value={broadcastName}
+                    onChange={(e) => setBroadcastName(e.target.value)}
+                    disabled={isBroadcasting}
+                    className="text-xl font-medium text-white mb-2 bg-transparent text-center border-b border-white/0 hover:border-white/20 focus:border-white/50 focus:outline-none transition-colors w-full px-2 py-1 max-w-[240px] appearance-none"
+                    placeholder="Broadcast Name"
+                />
                 <p className="text-sm text-zinc-400">Cast your system audio to the network.</p>
             </div>
 

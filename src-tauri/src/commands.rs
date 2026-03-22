@@ -56,7 +56,8 @@ pub fn list_output_devices() -> Result<Vec<AudioDevice>, String> {
 #[tauri::command]
 pub async fn start_host(
     session_id: String, 
-    device_name: Option<String>, 
+    device_name: Option<String>,
+    name: Option<String>,
     monitor: Option<bool>, 
     monitor_device: Option<String>,
     monitor_skip_channels: Option<u16>,
@@ -130,6 +131,9 @@ pub async fn start_host(
   properties.insert("sid".to_string(), session_id.clone());
   properties.insert("sr".to_string(), sample_rate.to_string());
   properties.insert("ch".to_string(), host_channels.to_string());
+  
+  let final_name = name.unwrap_or_else(|| format!("Broadcast {}", short_name));
+  properties.insert("name".to_string(), final_name);
 
   let service_info = ServiceInfo::new(
     SERVICE_TYPE,

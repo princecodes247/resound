@@ -15,6 +15,17 @@ function cn(...inputs: ClassValue[]) {
 const ADJECTIVES = ['Resonant', 'Crystal', 'Deep', 'Ethereal', 'Cosmic', 'Neon', 'Phantom', 'Golden', 'Silver', 'Crimson', 'Midnight', 'Sonic', 'Lucid', 'Vibrant', 'Dynamic', 'Magnetic', 'Electric', 'Solar', 'Lunar', 'Astral'];
 const NOUNS = ['Echo', 'Wave', 'Frequency', 'Bass', 'Treble', 'Pulse', 'Chord', 'Beat', 'Noise', 'Tone', 'Pitch', 'Chorus', 'Harmony', 'Rhythm', 'Resonance', 'Signal', 'Vibe', 'Static', 'Aura', 'Current'];
 
+const COLOR_THEMES = [
+    { name: 'Red', bg: 'bg-red-500', text: 'text-red-500', border: 'border-red-500', glow: 'bg-red-500/40', hoverBg: 'hover:bg-red-500/10', hoverText: 'hover:text-red-400', borderHover: 'hover:border-red-500/50', borderPing1: 'border-red-500/30', borderPing2: 'border-red-500/50', iconBg: 'bg-red-500/10', glowLight: 'bg-red-500/30' },
+    { name: 'Blue', bg: 'bg-blue-500', text: 'text-blue-500', border: 'border-blue-500', glow: 'bg-blue-500/40', hoverBg: 'hover:bg-blue-500/10', hoverText: 'hover:text-blue-400', borderHover: 'hover:border-blue-500/50', borderPing1: 'border-blue-500/30', borderPing2: 'border-blue-500/50', iconBg: 'bg-blue-500/10', glowLight: 'bg-blue-500/30' },
+    { name: 'Emerald', bg: 'bg-emerald-500', text: 'text-emerald-500', border: 'border-emerald-500', glow: 'bg-emerald-500/40', hoverBg: 'hover:bg-emerald-500/10', hoverText: 'hover:text-emerald-400', borderHover: 'hover:border-emerald-500/50', borderPing1: 'border-emerald-500/30', borderPing2: 'border-emerald-500/50', iconBg: 'bg-emerald-500/10', glowLight: 'bg-emerald-500/30' },
+    { name: 'Violet', bg: 'bg-violet-500', text: 'text-violet-500', border: 'border-violet-500', glow: 'bg-violet-500/40', hoverBg: 'hover:bg-violet-500/10', hoverText: 'hover:text-violet-400', borderHover: 'hover:border-violet-500/50', borderPing1: 'border-violet-500/30', borderPing2: 'border-violet-500/50', iconBg: 'bg-violet-500/10', glowLight: 'bg-violet-500/30' },
+    { name: 'Amber', bg: 'bg-amber-500', text: 'text-amber-500', border: 'border-amber-500', glow: 'bg-amber-500/40', hoverBg: 'hover:bg-amber-500/10', hoverText: 'hover:text-amber-400', borderHover: 'hover:border-amber-500/50', borderPing1: 'border-amber-500/30', borderPing2: 'border-amber-500/50', iconBg: 'bg-amber-500/10', glowLight: 'bg-amber-500/30' },
+    { name: 'Pink', bg: 'bg-pink-500', text: 'text-pink-500', border: 'border-pink-500', glow: 'bg-pink-500/40', hoverBg: 'hover:bg-pink-500/10', hoverText: 'hover:text-pink-400', borderHover: 'hover:border-pink-500/50', borderPing1: 'border-pink-500/30', borderPing2: 'border-pink-500/50', iconBg: 'bg-pink-500/10', glowLight: 'bg-pink-500/30' },
+    { name: 'Cyan', bg: 'bg-cyan-500', text: 'text-cyan-500', border: 'border-cyan-500', glow: 'bg-cyan-500/40', hoverBg: 'hover:bg-cyan-500/10', hoverText: 'hover:text-cyan-400', borderHover: 'hover:border-cyan-500/50', borderPing1: 'border-cyan-500/30', borderPing2: 'border-cyan-500/50', iconBg: 'bg-cyan-500/10', glowLight: 'bg-cyan-500/30' },
+    { name: 'Rose', bg: 'bg-rose-500', text: 'text-rose-500', border: 'border-rose-500', glow: 'bg-rose-500/40', hoverBg: 'hover:bg-rose-500/10', hoverText: 'hover:text-rose-400', borderHover: 'hover:border-rose-500/50', borderPing1: 'border-rose-500/30', borderPing2: 'border-rose-500/50', iconBg: 'bg-rose-500/10', glowLight: 'bg-rose-500/30' },
+];
+
 function generateBroadcastName() {
     const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
     const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
@@ -30,6 +41,16 @@ function getDeterministicName(deviceId: string) {
     const adj = ADJECTIVES[hash % ADJECTIVES.length];
     const noun = NOUNS[hash % NOUNS.length];
     return `${adj} ${noun}`;
+}
+
+export function getThemeForString(seed: string) {
+    if (!seed) return COLOR_THEMES[0];
+    let hash = 5381;
+    for (let i = 0; i < seed.length; i++) {
+        hash = ((hash << 5) + hash) + seed.charCodeAt(i);
+    }
+    hash = Math.abs(hash);
+    return COLOR_THEMES[hash % COLOR_THEMES.length];
 }
 
 // --- Main App ---
@@ -73,6 +94,14 @@ export default function App() {
         setMode(newMode);
     };
 
+    // Calculate dynamic glowing theme
+    const myTheme = useMemo(() => getThemeForString(broadcastName), [broadcastName]);
+    const listenGlowClass = receiver.status === 'receiving' && receiver.selectedHost
+        ? getThemeForString(receiver.selectedHost.name).bg
+        : 'bg-zinc-800';
+
+    const ambientGlowClass = isBroadcasting ? myTheme.bg : isListening ? listenGlowClass : 'bg-zinc-800';
+
     return (
         <div className="min-h-screen bg-[#0A0A0B] text-white flex flex-col items-center justify-center p-6 font-sans selection:bg-white/20 relative">
 
@@ -80,7 +109,7 @@ export default function App() {
             <div className="fixed inset-0 pointer-events-none z-0">
                 <div className={cn(
                     "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full blur-[160px] opacity-20 transition-colors duration-1000",
-                    isBroadcasting ? "bg-red-500" : isListening ? "bg-blue-500" : "bg-zinc-800"
+                    ambientGlowClass
                 )} />
             </div>
 
@@ -146,6 +175,7 @@ export default function App() {
                                 monitorDevice={monitorDevice}
                                 monitorGain={monitorGain}
                                 broadcastGain={broadcastGain}
+                                theme={myTheme}
                             />
                         ) : (
                             <ListenView
@@ -238,7 +268,7 @@ function SettingsSlider({ label, value, onChange }: { label: string, value: numb
     );
 }
 
-function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, setSelectedDevice, monitorDevice, monitorGain, broadcastGain }: any) {
+function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, setSelectedDevice, monitorDevice, monitorGain, broadcastGain, theme }: any) {
     const isBroadcasting = host.status === 'broadcasting';
 
     const handleStart = () => {
@@ -308,8 +338,8 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
             ) : (
                 <div className="w-full flex justify-center py-6">
                     <div className="relative group cursor-pointer" onClick={host.stopHost}>
-                        <div className="absolute inset-0 bg-red-500 rounded-full blur-xl opacity-40 animate-pulse" />
-                        <div className="relative w-32 h-32 rounded-full border-2 border-red-500 flex flex-col items-center justify-center text-red-500 hover:bg-red-500/10 transition-colors bg-[#141415]">
+                        <div className={`absolute inset-0 ${theme.glow} rounded-full blur-xl animate-pulse`} />
+                        <div className={`relative w-32 h-32 rounded-full border-2 ${theme.border} flex flex-col items-center justify-center ${theme.text} ${theme.hoverBg} transition-colors bg-[#141415]`}>
                             <span className="text-sm font-bold tracking-widest uppercase">On Air</span>
                             <span className="text-[10px] uppercase mt-1 opacity-70 group-hover:opacity-100 transition-opacity">Tap to Stop</span>
                         </div>
@@ -329,6 +359,8 @@ function ListenView({ receiver, outputGain }: any) {
         if (!receiver.selectedHost) return 'Broadcaster';
         return receiver.selectedHost.name;
     }, [receiver.selectedHost]);
+
+    const activeTheme = useMemo(() => getThemeForString(activeHostName), [activeHostName]);
 
     const handleConnect = (hostNode: any) => {
         receiver.connectAndPlay(hostNode, outputGain);
@@ -368,41 +400,44 @@ function ListenView({ receiver, outputGain }: any) {
                                 <span className="text-xs text-zinc-600 mt-1">Make sure a host is on the same network.</span>
                             </div>
                         ) : (
-                            receiver.hosts.map((hostNode: any, i: number) => (
-                                <button
-                                    key={i}
-                                    onClick={() => handleConnect(hostNode)}
-                                    className="w-full flex items-center justify-between p-4 rounded-2xl bg-zinc-900/50 border border-white/5 hover:bg-white/5 hover:border-white/20 transition-all group text-left focus:outline-none focus:ring-2 focus:ring-white/20"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center">
-                                            <Headphones size={20} />
+                            receiver.hosts.map((hostNode: any, i: number) => {
+                                const hostTheme = getThemeForString(hostNode.name);
+                                return (
+                                    <button
+                                        key={i}
+                                        onClick={() => handleConnect(hostNode)}
+                                        className="w-full flex items-center justify-between p-4 rounded-2xl bg-zinc-900/50 border border-white/5 hover:bg-white/5 hover:border-white/20 transition-all group text-left focus:outline-none focus:ring-2 focus:ring-white/20"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-10 h-10 rounded-full ${hostTheme.iconBg} ${hostTheme.text} flex items-center justify-center`}>
+                                                <Headphones size={20} />
+                                            </div>
+                                            <div>
+                                                <div className="font-medium text-white text-sm">{hostNode.name}</div>
+                                                <div className="text-[11px] text-zinc-500 mt-0.5">{hostNode.ip}</div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <div className="font-medium text-white text-sm">{hostNode.name}</div>
-                                            <div className="text-[11px] text-zinc-500 mt-0.5">{hostNode.ip}</div>
+                                        <div className={`text-[11px] font-bold uppercase tracking-wider ${hostTheme.text} opacity-0 group-hover:opacity-100 transition-opacity pr-2`}>
+                                            Connect
                                         </div>
-                                    </div>
-                                    <div className="text-[11px] font-bold uppercase tracking-wider text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
-                                        Connect
-                                    </div>
-                                </button>
-                            ))
+                                    </button>
+                                );
+                            })
                         )}
                     </div>
                 </div>
             ) : (
                 <div className="w-full flex flex-col items-center justify-center flex-1 py-4">
                     <div className="relative w-32 h-32 mb-8">
-                        <div className="absolute inset-0 bg-blue-500 rounded-full blur-xl opacity-30 animate-pulse" />
-                        <div className="absolute inset-4 rounded-full border border-blue-500/30 animate-[ping_3s_ease-out_infinite]" />
-                        <div className="absolute inset-8 rounded-full border border-blue-500/50 animate-[ping_3s_ease-out_infinite_500ms]" />
-                        <div className="relative w-full h-full rounded-full bg-zinc-900 flex items-center justify-center text-blue-400 border border-blue-500/20 shadow-xl overflow-hidden">
+                        <div className={`absolute inset-0 ${activeTheme.glowLight} rounded-full blur-xl animate-pulse`} />
+                        <div className={`absolute inset-4 rounded-full border ${activeTheme.borderPing1} animate-[ping_3s_ease-out_infinite]`} />
+                        <div className={`absolute inset-8 rounded-full border ${activeTheme.borderPing2} animate-[ping_3s_ease-out_infinite_500ms]`} />
+                        <div className={`relative w-full h-full rounded-full bg-zinc-900 flex items-center justify-center ${activeTheme.text} border border-white/5 shadow-xl overflow-hidden`}>
                             <div className="flex gap-1 items-end h-8">
                                 {[1, 2, 3, 4, 5].map((i) => (
                                     <motion.div
                                         key={i}
-                                        className="w-1.5 bg-blue-400 rounded-full"
+                                        className={`w-1.5 ${activeTheme.bg} rounded-full`}
                                         animate={{ height: ['20%', '100%', '20%'] }}
                                         transition={{ duration: 0.8 + (i * 0.1), repeat: Infinity, ease: 'easeInOut' }}
                                     />
@@ -418,7 +453,7 @@ function ListenView({ receiver, outputGain }: any) {
 
                     <button
                         onClick={receiver.stopReceiver}
-                        className="w-full py-4 rounded-2xl bg-zinc-900 border border-white/10 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 transition-all text-sm font-medium text-white flex justify-center focus:outline-none"
+                        className={`w-full py-4 rounded-2xl bg-zinc-900 border border-white/10 ${activeTheme.borderHover} ${activeTheme.hoverBg} ${activeTheme.hoverText} transition-all text-sm font-medium text-white flex justify-center focus:outline-none`}
                     >
                         Disconnect
                     </button>

@@ -8,6 +8,7 @@ export const useAudioReceiver = () => {
   >("idle");
   const [hosts, setHosts] = useState<DiscoveredHost[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [selectedHost, setSelectedHost] = useState<DiscoveredHost | null>(null);
 
   const addLog = useCallback((message: string) => {
     setLogs((prev) => [
@@ -37,6 +38,7 @@ export const useAudioReceiver = () => {
 
   const connectAndPlay = async (host: DiscoveredHost, outputGain: number) => {
     setStatus("connecting");
+    setSelectedHost(host);
     addLog(`Connecting to ${host.ip}:${host.port} (Native)...`);
 
     try {
@@ -52,6 +54,7 @@ export const useAudioReceiver = () => {
       addLog("Playing (Native)");
     } catch (e) {
       setStatus("error");
+      setSelectedHost(null);
       addLog(`Connection error: ${String(e)}`);
     }
   };
@@ -61,6 +64,7 @@ export const useAudioReceiver = () => {
     try {
       await invoke("stop_receiver");
       setStatus("idle");
+      setSelectedHost(null);
       addLog("Receiver stopped.");
     } catch (e) {
       addLog(`Error stopping receiver: ${String(e)}`);
@@ -71,6 +75,7 @@ export const useAudioReceiver = () => {
     status,
     hosts,
     logs,
+    selectedHost,
     discoverHosts,
     connectAndPlay,
     stopReceiver,

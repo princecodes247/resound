@@ -1,160 +1,119 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Resound</title>
-    <style>
-      body {
-        font-family:
-          system-ui,
-          -apple-system,
-          Segoe UI,
-          Roboto,
-          Helvetica,
-          Arial,
-          sans-serif;
-        margin: 16px;
-        color: #111;
-        background: #fafafa;
-      }
-      .row {
-        display: flex;
-        gap: 16px;
-        flex-wrap: wrap;
-      }
-      .panel {
-        flex: 1;
-        min-width: 320px;
-        background: white;
-        border: 1px solid #e8e8e8;
-        border-radius: 12px;
-        padding: 14px;
-      }
-      button {
-        padding: 10px 12px;
-        border-radius: 10px;
-        border: 1px solid #d9d9d9;
-        background: #fff;
-        cursor: pointer;
-      }
-      button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-      code {
-        background: #f2f2f2;
-        padding: 2px 6px;
-        border-radius: 6px;
-      }
-      .muted {
-        color: #555;
-      }
-      .log {
-        margin-top: 10px;
-        font-family:
-          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        font-size: 12px;
-        background: #0b1020;
-        color: #cdd7ff;
-        padding: 10px;
-        border-radius: 10px;
-        min-height: 120px;
-        overflow: auto;
-        white-space: pre-wrap;
-      }
-      select {
-        width: 100%;
-        padding: 10px;
-        border-radius: 10px;
-        border: 1px solid #d9d9d9;
-        background: #fff;
-      }
-      .field {
-        margin-top: 10px;
-      }
-    </style>
+    <title>Resound | Premium LAN Audio</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
-    <h1>Resound (LAN Audio Receivers)</h1>
-    <div class="muted">
-      MVP: Host captures system audio via
-      <code>getDisplayMedia({ audio: true })</code>, then sends it to multiple
-      receivers using WebRTC+Opus.
-    </div>
+    <div class="container">
+      <header>
+        <h1>RESOUND</h1>
+        <p class="muted">
+          High-performance, low-latency audio broadcasting over your local
+          network.
+        </p>
+      </header>
 
-    <div class="row">
-      <div class="panel">
-        <div class="field">
-          <select id="deviceSelect">
-            <option value="">Default Input</option>
-          </select>
-        </div>
-        <div class="field" style="display: flex; gap: 8px">
-          <button id="btnStartHost">Start Host</button>
-          <button
-            id="btnStopHost"
-            style="
-              display: none;
-              background: #fff1f0;
-              border-color: #ffa39e;
-              color: #cf1322;
-            "
-          >
-            Stop Host
-          </button>
-        </div>
-        <div class="field">
-          <label
-            style="
-              display: flex;
-              align-items: center;
-              gap: 8px;
-              cursor: pointer;
-            "
-          >
-            <input type="checkbox" id="monitorCheckbox" checked />
-            <span>Monitor locally (play on this device)</span>
-          </label>
-        </div>
+      <div class="row">
+        <!-- Host Panel -->
+        <div class="panel">
+          <h2>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9" />
+              <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5" />
+              <circle cx="12" cy="12" r="2" />
+              <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5" />
+              <path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1" />
+            </svg>
+            Broadcast Host
+          </h2>
 
-        <div
-          id="monitorSettings"
-          style="margin-left: 24px; font-size: 13px; color: #555"
-        >
           <div class="field">
-            Monitor Device:
+            <label for="deviceSelect">Input Device</label>
+            <select id="deviceSelect">
+              <option value="">Default Input</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label
+              class="checkbox-container"
+              style="
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                cursor: pointer;
+              "
+            >
+              <input
+                type="checkbox"
+                id="monitorCheckbox"
+                checked
+                style="width: auto"
+              />
+              <span>Monitor locally on this device</span>
+            </label>
+          </div>
+
+          <div
+            id="monitorSettings"
+            class="field"
+            style="
+              padding-left: 28px;
+              border-left: 2px solid var(--border-color);
+              margin-top: 10px;
+            "
+          >
+            <label for="monitorDeviceSelect">Monitor Output Device</label>
             <select
               id="monitorDeviceSelect"
-              style="margin-top: 4px; padding: 4px 8px; font-size: 12px"
+              style="margin-bottom: 12px"
             ></select>
-          </div>
-          <div class="field">
-            Skip first
+
+            <label for="monitorSkipChannels"
+              >Skip Channels (Feedback Prevention)</label
+            >
             <input
               type="number"
               id="monitorSkipChannels"
               value="0"
               min="0"
-              style="width: 40px; padding: 4px; font-size: 12px"
+              style="width: 80px"
             />
-            channels (to avoid feedback)
           </div>
-        </div>
 
-        <div class="field" id="boostControls">
-          <div
-            style="
-              display: flex;
-              flex-direction: column;
-              gap: 8px;
-              font-size: 13px;
-              margin-top: 8px;
-            "
-          >
-            <div style="display: flex; justify-content: space-between">
-              <span>Monitor Boost:</span>
-              <span id="monitorBoostVal">1.5x</span>
+          <div class="field">
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 8px;
+              "
+            >
+              <label>Monitor Boost</label>
+              <span
+                id="monitorBoostVal"
+                style="font-weight: 600; color: var(--accent-color)"
+                >1.5x</span
+              >
             </div>
             <input
               type="range"
@@ -163,18 +122,23 @@
               max="3"
               step="0.1"
               value="1.5"
-              style="width: 100%"
             />
+          </div>
 
+          <div class="field">
             <div
               style="
                 display: flex;
                 justify-content: space-between;
-                margin-top: 4px;
+                margin-bottom: 8px;
               "
             >
-              <span>Broadcast Boost:</span>
-              <span id="broadcastBoostVal">3.0x</span>
+              <label>Broadcast Boost</label>
+              <span
+                id="broadcastBoostVal"
+                style="font-weight: 600; color: var(--accent-color)"
+                >3.0x</span
+              >
             </div>
             <input
               type="range"
@@ -183,39 +147,116 @@
               max="3"
               step="0.1"
               value="3.0"
-              style="width: 100%"
             />
           </div>
+
+          <div class="btn-group">
+            <button id="btnStartHost">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              Start Hosting
+            </button>
+            <button id="btnStopHost" class="danger" style="display: none">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+              </svg>
+              Stop Hosting
+            </button>
+          </div>
+
+          <div class="status-badge" id="hostStatus">Status: Idle</div>
+          <div style="margin-top: 12px; font-size: 0.8rem">
+            ID:
+            <code id="hostSessionId" style="font-size: 0.7rem"
+              >not started</code
+            >
+          </div>
+          <div class="log" id="hostLog"></div>
         </div>
 
-        <div class="field">
-          Session ID: <code id="hostSessionId">not started</code>
-        </div>
-        <div class="field muted" id="hostStatus">Idle</div>
-        <div class="log" id="hostLog"></div>
-      </div>
+        <!-- Receiver Panel -->
+        <div class="panel">
+          <h2>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Receiver
+          </h2>
 
-      <div class="panel">
-        <h2>Receivers</h2>
-        <div class="field">
-          <button id="btnDiscover">Discover Hosts</button>
-        </div>
-        <div class="field">
-          <select id="hostSelect" disabled></select>
-        </div>
-        <div class="field">
-          <div
-            style="
-              display: flex;
-              flex-direction: column;
-              gap: 8px;
-              font-size: 13px;
-              margin-bottom: 8px;
-            "
-          >
-            <div style="display: flex; justify-content: space-between">
-              <span>Output Boost:</span>
-              <span id="outputBoostVal">1.2x</span>
+          <div class="field">
+            <button id="btnDiscover" class="secondary">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              Discover Hosts
+            </button>
+          </div>
+
+          <div class="field">
+            <label for="hostSelect">Available Hosts</label>
+            <select id="hostSelect" disabled>
+              <option value="">No hosts discovered yet</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 8px;
+              "
+            >
+              <label>Output Boost</label>
+              <span
+                id="outputBoostVal"
+                style="font-weight: 600; color: var(--accent-color)"
+                >1.2x</span
+              >
             </div>
             <input
               type="range"
@@ -224,29 +265,57 @@
               max="3"
               step="0.1"
               value="1.2"
-              style="width: 100%"
             />
           </div>
-          <button id="btnConnect" disabled>Connect & Play</button>
-          <button
-            id="btnDisconnect"
-            style="
-              display: none;
-              background: #fff1f0;
-              border-color: #ffa39e;
-              color: #cf1322;
-            "
-          >
-            Disconnect
-          </button>
+
+          <div class="btn-group">
+            <button id="btnConnect" disabled>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+                />
+                <path
+                  d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+                />
+              </svg>
+              Connect & Play
+            </button>
+            <button id="btnDisconnect" class="danger" style="display: none">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+              Disconnect
+            </button>
+          </div>
+
+          <div class="status-badge" id="rxStatus">Status: Idle</div>
+          <div class="log" id="rxLog"></div>
         </div>
-        <div class="field muted" id="rxStatus">Idle</div>
-        <div class="log" id="rxLog"></div>
       </div>
     </div>
 
     <audio id="audio" autoplay playsinline></audio>
-
     <script type="module" src="./app.js"></script>
   </body>
 </html>

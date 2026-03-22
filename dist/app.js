@@ -8,7 +8,9 @@ function nowStr() {
 }
 
 function log(el, msg) {
-  el.textContent += `[${nowStr()}] ${msg}\n`;
+  const line = document.createElement("div");
+  line.textContent = `[${nowStr()}] ${msg}`;
+  el.appendChild(line);
   el.scrollTop = el.scrollHeight;
 }
 
@@ -151,8 +153,8 @@ async function startHost() {
     broadcastGain,
   });
   host.signalingPort = port;
-  $("hostStatus").textContent =
-    `Signaling on port ${port}. Streaming native audio...`;
+  $("hostStatus").textContent = `Broadcasting on port ${port}`;
+  $("hostStatus").classList.add("status-active", "pulse");
   log(hostLogEl, `mDNS+WS+Capture started. Port=${port}`);
 
   $("btnStartHost").style.display = "none";
@@ -280,7 +282,8 @@ async function stopHost() {
     host.signalingPort = null;
 
     $("hostSessionId").textContent = "not started";
-    $("hostStatus").textContent = "Idle";
+    $("hostStatus").textContent = "Status: Idle";
+    $("hostStatus").classList.remove("status-active", "pulse");
     log(hostLogEl, "Host stopped successfully.");
 
     $("btnStartHost").style.display = "inline-block";
@@ -386,7 +389,8 @@ async function connectAndPlay() {
       channels: hostInfo.channels || 2,
       outputGain,
     });
-    $("rxStatus").textContent = "Playing (Native)";
+    $("rxStatus").textContent = "Status: Playing";
+    $("rxStatus").classList.add("status-active", "pulse");
     log(rxLogEl, "Native audio receiver started.");
   } catch (err) {
     $("rxStatus").textContent = `Error: ${err}`;
@@ -445,7 +449,8 @@ $("btnDisconnect").addEventListener("click", async () => {
   $("btnDisconnect").disabled = true;
   try {
     await invoke("stop_receiver");
-    $("rxStatus").textContent = "Disconnected";
+    $("rxStatus").textContent = "Status: Disconnected";
+    $("rxStatus").classList.remove("status-active", "pulse");
     log(rxLogEl, "Native audio receiver stopped.");
     $("btnDisconnect").style.display = "none";
     $("btnConnect").style.display = "inline-block";

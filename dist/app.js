@@ -9,7 +9,8 @@ function nowStr() {
 
 function log(el, msg) {
   const line = document.createElement("div");
-  line.textContent = `[${nowStr()}] ${msg}`;
+  line.className = "log-entry";
+  line.innerHTML = `<span class="log-time">${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</span> <span>${msg}</span>`;
   el.appendChild(line);
   el.scrollTop = el.scrollHeight;
 }
@@ -153,12 +154,12 @@ async function startHost() {
     broadcastGain,
   });
   host.signalingPort = port;
-  $("hostStatus").textContent = `Broadcasting on port ${port}`;
+  $("hostStatus").innerHTML = '<div class="dot"></div> ON AIR';
   $("hostStatus").classList.add("status-active", "pulse");
-  log(hostLogEl, `mDNS+WS+Capture started. Port=${port}`);
+  log(hostLogEl, `Engine started on port ${port}`);
 
-  $("btnStartHost").style.display = "none";
-  $("btnStopHost").style.display = "inline-block";
+  $("btnStartHost").classList.add("hidden");
+  $("btnStopHost").classList.remove("hidden");
   $("btnStopHost").disabled = false;
 
   // 3) Connect to local signaling server as "host"
@@ -282,13 +283,13 @@ async function stopHost() {
     host.signalingPort = null;
 
     $("hostSessionId").textContent = "not started";
-    $("hostStatus").textContent = "Status: Idle";
+    $("hostStatus").innerHTML = '<div class="dot"></div> IDLE';
     $("hostStatus").classList.remove("status-active", "pulse");
     log(hostLogEl, "Host stopped successfully.");
 
-    $("btnStartHost").style.display = "inline-block";
+    $("btnStartHost").classList.remove("hidden");
     $("btnStartHost").disabled = false;
-    $("btnStopHost").style.display = "none";
+    $("btnStopHost").classList.add("hidden");
   } catch (e) {
     console.error("Stop error:", e);
     log(hostLogEl, `ERROR stopping host: ${e?.message ?? String(e)}`);
@@ -311,9 +312,9 @@ function resetReceiverUi() {
   receiver.pc = null;
   $("hostSelect").disabled = true;
   $("btnConnect").disabled = true;
-  $("btnConnect").style.display = "inline-block";
-  $("btnDisconnect").style.display = "none";
-  $("rxStatus").textContent = "Idle";
+  $("btnConnect").classList.remove("hidden");
+  $("btnDisconnect").classList.add("hidden");
+  $("rxStatus").innerHTML = '<div class="dot"></div> IDLE';
   rxLogEl.textContent = "";
 }
 
@@ -389,7 +390,7 @@ async function connectAndPlay() {
       channels: hostInfo.channels || 2,
       outputGain,
     });
-    $("rxStatus").textContent = "Status: Playing";
+    $("rxStatus").innerHTML = '<div class="dot"></div> RECEIVING';
     $("rxStatus").classList.add("status-active", "pulse");
     log(rxLogEl, "Native audio receiver started.");
   } catch (err) {
@@ -434,8 +435,8 @@ $("btnConnect").addEventListener("click", async () => {
   $("btnConnect").disabled = true;
   try {
     await connectAndPlay();
-    $("btnConnect").style.display = "none";
-    $("btnDisconnect").style.display = "inline-block";
+    $("btnConnect").classList.add("hidden");
+    $("btnDisconnect").classList.remove("hidden");
     $("btnDisconnect").disabled = false;
   } catch (e) {
     console.error(e);
@@ -449,11 +450,11 @@ $("btnDisconnect").addEventListener("click", async () => {
   $("btnDisconnect").disabled = true;
   try {
     await invoke("stop_receiver");
-    $("rxStatus").textContent = "Status: Disconnected";
+    $("rxStatus").innerHTML = '<div class="dot"></div> DISCONNECTED';
     $("rxStatus").classList.remove("status-active", "pulse");
     log(rxLogEl, "Native audio receiver stopped.");
-    $("btnDisconnect").style.display = "none";
-    $("btnConnect").style.display = "inline-block";
+    $("btnDisconnect").classList.add("hidden");
+    $("btnConnect").classList.remove("hidden");
     $("btnConnect").disabled = false;
   } catch (err) {
     log(rxLogEl, `Error stopping receiver: ${err}`);

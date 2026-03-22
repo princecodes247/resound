@@ -42,5 +42,6 @@ futures-util = "0.3.32"
 
 # Audio capture
 cpal = "0.15"
+machine-uid = "0.5.4"
 
 

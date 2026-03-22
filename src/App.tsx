@@ -5,6 +5,7 @@ import { Radio, Headphones, RefreshCw, Power, Settings, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { invoke } from '@tauri-apps/api/core';
 
 // --- Utility ---
 function cn(...inputs: ClassValue[]) {
@@ -20,6 +21,17 @@ function generateBroadcastName() {
     return `${adj} ${noun}`;
 }
 
+function getDeterministicName(deviceId: string) {
+    let hash = 5381;
+    for (let i = 0; i < deviceId.length; i++) {
+        hash = ((hash << 5) + hash) + deviceId.charCodeAt(i);
+    }
+    hash = Math.abs(hash);
+    const adj = ADJECTIVES[hash % ADJECTIVES.length];
+    const noun = NOUNS[hash % NOUNS.length];
+    return `${adj} ${noun}`;
+}
+
 // --- Main App ---
 export default function App() {
     const host = useAudioHost();
@@ -30,8 +42,14 @@ export default function App() {
 
     // Settings State
     const [showSettings, setShowSettings] = useState(false);
-    const [broadcastName, setBroadcastName] = useState(generateBroadcastName);
+    const [broadcastName, setBroadcastName] = useState('');
     const [selectedDevice, setSelectedDevice] = useState('');
+
+    useEffect(() => {
+        invoke<string>('get_device_id')
+            .then(id => setBroadcastName(getDeterministicName(id)))
+            .catch(() => setBroadcastName(generateBroadcastName()));
+    }, []);
     const [monitorDevice, setMonitorDevice] = useState('');
     const [monitorGain, setMonitorGain] = useState(1.0);
     const [broadcastGain, setBroadcastGain] = useState(1.0);

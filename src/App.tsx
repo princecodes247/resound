@@ -76,6 +76,16 @@ export default function App() {
     const [broadcastGain, setBroadcastGain] = useState(1.0);
     const [outputGain, setOutputGain] = useState(1.0);
 
+    // Auto-select "test dev" for monitor device if available
+    useEffect(() => {
+        if (!monitorDevice && host.outputDevices?.length > 0) {
+            const testDev = host.outputDevices.find((d: any) => d.name.toLowerCase().includes('test dev'));
+            if (testDev) {
+                setMonitorDevice(testDev.name);
+            }
+        }
+    }, [host.outputDevices]);
+
     // Prevent mode switching if mid-operation
     const isBroadcasting = host.status === 'broadcasting' || host.status === 'starting';
     const isListening = receiver.status === 'receiving' || receiver.status === 'connecting';

@@ -11,6 +11,15 @@ function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
+const ADJECTIVES = ['Resonant', 'Crystal', 'Deep', 'Ethereal', 'Cosmic', 'Neon', 'Phantom', 'Golden', 'Silver', 'Crimson', 'Midnight', 'Sonic', 'Lucid', 'Vibrant', 'Dynamic', 'Magnetic', 'Electric', 'Solar', 'Lunar', 'Astral'];
+const NOUNS = ['Echo', 'Wave', 'Frequency', 'Bass', 'Treble', 'Pulse', 'Chord', 'Beat', 'Noise', 'Tone', 'Pitch', 'Chorus', 'Harmony', 'Rhythm', 'Resonance', 'Signal', 'Vibe', 'Static', 'Aura', 'Current'];
+
+function generateBroadcastName() {
+    const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+    const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+    return `${adj} ${noun}`;
+}
+
 // --- Main App ---
 export default function App() {
     const host = useAudioHost();
@@ -21,7 +30,7 @@ export default function App() {
 
     // Settings State
     const [showSettings, setShowSettings] = useState(false);
-    const [broadcastName, setBroadcastName] = useState(() => `Resound ${Math.floor(Math.random() * 1000)}`);
+    const [broadcastName, setBroadcastName] = useState(generateBroadcastName);
     const [selectedDevice, setSelectedDevice] = useState('');
     const [monitorDevice, setMonitorDevice] = useState('');
     const [monitorGain, setMonitorGain] = useState(1.0);

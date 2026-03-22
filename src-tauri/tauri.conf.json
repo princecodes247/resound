@@ -14,10 +14,22 @@
     "windows": [
       {
         "title": "Resound",
+        "label": "main",
         "width": 800,
         "height": 700,
         "resizable": true,
         "fullscreen": false
+      },
+      {
+        "title": "Tray",
+        "label": "tray",
+        "width": 320,
+        "height": 420,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "visible": false,
+        "alwaysOnTop": true
       }
     ],
     "security": {

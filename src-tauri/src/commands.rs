@@ -305,3 +305,29 @@ pub fn get_default_audio_device(is_input: bool) -> Result<String, String> {
 pub fn set_default_audio_device(is_input: bool, name: String) -> Result<(), String> {
     crate::macos_audio::set_default_device(is_input, &name)
 }
+
+#[tauri::command]
+pub fn get_system_volume() -> Result<u32, String> {
+    let output = std::process::Command::new("osascript")
+        .args(&["-e", "output volume of (get volume settings)"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    stdout.parse::<u32>().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_system_volume(volume: u32) -> Result<(), String> {
+    let script = format!("set volume output volume {}", volume);
+    let status = std::process::Command::new("osascript")
+        .args(&["-e", &script])
+        .status()
+        .map_err(|e| e.to_string())?;
+    
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Failed to set volume".to_string())
+    }
+}

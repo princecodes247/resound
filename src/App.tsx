@@ -281,7 +281,7 @@ function SettingsSlider({ label, value, onChange }: { label: string, value: numb
 function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, setSelectedDevice, monitorDevice, monitorGain, broadcastGain, theme }: any) {
     const isBroadcasting = host.status === 'broadcasting';
     const [showAudioPrompt, setShowAudioPrompt] = useState(false);
-    const [originalDevices, setOriginalDevices] = useState<{ input: string, output: string } | null>(null);
+    const [originalDevices, setOriginalDevices] = useState<{ input: string, output: string, volume: number | null } | null>(null);
 
     const handleStart = async () => {
         try {
@@ -292,7 +292,8 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
             const isTestDev = currentOutput.toLowerCase().includes('test dev');
 
             if (!isBlackHole || !isTestDev) {
-                setOriginalDevices({ input: currentInput, output: currentOutput });
+                const currentVolume = await invoke<number>('get_system_volume').catch(() => null);
+                setOriginalDevices({ input: currentInput, output: currentOutput, volume: currentVolume });
                 setShowAudioPrompt(true);
                 return;
             }
@@ -317,6 +318,7 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
 
     const handleAutoSwitch = async () => {
         try {
+            await invoke('set_system_volume', { volume: 100 }).catch(e => console.error("Volume failed", e));
             await invoke('set_default_audio_device', { isInput: false, name: 'blackhole' });
             // await invoke('set_default_audio_device', { isInput: false, name: 'test dev' });
         } catch (e) {
@@ -332,6 +334,9 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
             try {
                 await invoke('set_default_audio_device', { isInput: true, name: originalDevices.input });
                 await invoke('set_default_audio_device', { isInput: false, name: originalDevices.output });
+                if (originalDevices.volume !== null) {
+                    await invoke('set_system_volume', { volume: originalDevices.volume });
+                }
             } catch (e) {
                 console.error('Failed to restore audio devices', e);
             }

@@ -418,7 +418,9 @@ pub fn run() {
       commands::stop_receiver,
       commands::get_device_id,
       commands::get_default_audio_device,
-      commands::set_default_audio_device
+      commands::set_default_audio_device,
+      commands::get_system_volume,
+      commands::set_system_volume
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

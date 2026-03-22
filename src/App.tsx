@@ -49,9 +49,9 @@ export default function App() {
         <div className="min-h-screen bg-[#0A0A0B] text-white flex flex-col items-center justify-center p-6 font-sans selection:bg-white/20 relative">
 
             {/* Background glow effects */}
-            <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+            <div className="fixed inset-0 pointer-events-none z-0">
                 <div className={cn(
-                    "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[120px] opacity-20 transition-colors duration-1000",
+                    "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full blur-[160px] opacity-20 transition-colors duration-1000",
                     isBroadcasting ? "bg-red-500" : isListening ? "bg-blue-500" : "bg-zinc-800"
                 )} />
             </div>

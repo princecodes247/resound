@@ -106,25 +106,25 @@ export default function App() {
         <div className="min-h-screen bg-[#0A0A0B] text-white flex flex-col items-center justify-center p-6 font-sans selection:bg-white/20 relative">
 
             {/* Background glow effects */}
-            <div className="fixed inset-0 pointer-events-none z-0">
+            <div className="fixed inset-0 z-0 pointer-events-none">
                 <div className={cn(
                     "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full blur-[160px] opacity-20 transition-colors duration-1000",
                     ambientGlowClass
                 )} />
             </div>
 
-            <main className="w-full max-w-md z-10 relative flex flex-col items-center">
+            <main className="relative z-10 flex flex-col items-center w-full max-w-md">
 
                 {/* Header */}
-                <div className="w-full flex justify-between items-start mb-10 px-2">
+                <div className="flex items-start justify-between w-full px-2 mb-10">
                     <div className="w-10" /> {/* Spacer */}
                     <div className="text-center">
                         <h1 className="text-2xl font-semibold tracking-tight">Resound</h1>
-                        <p className="text-sm text-zinc-400 mt-1">Local Network Audio</p>
+                        <p className="mt-1 text-sm text-zinc-400">Local Network Audio</p>
                     </div>
                     <button
                         onClick={() => setShowSettings(true)}
-                        className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors focus:outline-none"
+                        className="flex items-center justify-center w-10 h-10 transition-colors border rounded-full bg-white/5 border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 focus:outline-none"
                     >
                         <Settings size={18} />
                     </button>
@@ -204,39 +204,39 @@ export default function App() {
                             exit={{ scale: 0.95, y: 20 }}
                             className="w-full max-w-sm bg-[#141415] border border-white/10 rounded-3xl p-6 shadow-2xl relative"
                         >
-                            <button onClick={() => setShowSettings(false)} className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-white bg-white/5 rounded-full transition-colors focus:outline-none">
+                            <button onClick={() => setShowSettings(false)} className="absolute p-2 transition-colors rounded-full top-4 right-4 text-zinc-400 hover:text-white bg-white/5 focus:outline-none">
                                 <X size={16} />
                             </button>
-                            <h3 className="text-lg font-medium mb-6">Audio Settings</h3>
+                            <h3 className="mb-6 text-lg font-medium">Audio Settings</h3>
 
                             <div className="space-y-6">
                                 {/* Monitor Device */}
                                 <div>
-                                    <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Local Monitor Output</label>
+                                    <label className="block mb-2 text-xs font-semibold tracking-wider uppercase text-zinc-500">Local Monitor Output</label>
                                     <div className="relative">
                                         <select
                                             value={monitorDevice}
                                             onChange={(e) => setMonitorDevice(e.target.value)}
-                                            className="w-full appearance-none bg-zinc-900/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-white/30 transition-colors cursor-pointer"
+                                            className="w-full px-4 py-3 text-sm text-white transition-colors border appearance-none cursor-pointer bg-zinc-900/50 border-white/10 rounded-xl focus:outline-none focus:border-white/30"
                                         >
                                             <option value="">None (Disabled)</option>
                                             {host.outputDevices.map((d: any) => (
                                                 <option key={d.name} value={d.name}>{d.name}</option>
                                             ))}
                                         </select>
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500">
+                                        <div className="absolute -translate-y-1/2 pointer-events-none right-4 top-1/2 text-zinc-500">
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
                                         </div>
                                     </div>
                                     <p className="text-[10px] text-zinc-500 mt-2">Outputs your broadcast to a local device (e.g., headphones) to hear exactly what is being sent.</p>
                                 </div>
 
-                                <div className="h-px w-full bg-white/5" />
+                                <div className="w-full h-px bg-white/5" />
 
                                 {/* Gains */}
                                 <SettingsSlider label="Monitor Boost" value={monitorGain} onChange={setMonitorGain} />
                                 <SettingsSlider label="Broadcast Boost" value={broadcastGain} onChange={setBroadcastGain} />
-                                <div className="h-px w-full bg-white/5" />
+                                <div className="w-full h-px bg-white/5" />
                                 <SettingsSlider label="Receiver Output Boost" value={outputGain} onChange={setOutputGain} />
 
                             </div>
@@ -254,15 +254,15 @@ export default function App() {
 function SettingsSlider({ label, value, onChange }: { label: string, value: number, onChange: (v: number) => void }) {
     return (
         <div>
-            <div className="flex justify-between items-end mb-2">
-                <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider">{label}</label>
-                <span className="text-zinc-400 font-mono text-xs">{value.toFixed(1)}x</span>
+            <div className="flex items-end justify-between mb-2">
+                <label className="block text-xs font-semibold tracking-wider uppercase text-zinc-500">{label}</label>
+                <span className="font-mono text-xs text-zinc-400">{value.toFixed(1)}x</span>
             </div>
             <input
                 type="range" min={1} max={3} step={0.1}
                 value={value}
                 onChange={(e) => onChange(Number(e.target.value))}
-                className="w-full h-1 bg-zinc-800 rounded-full appearance-none cursor-pointer accent-white focus:outline-none focus:ring-2 focus:ring-white/50"
+                className="w-full h-1 rounded-full appearance-none cursor-pointer bg-zinc-800 accent-white focus:outline-none focus:ring-2 focus:ring-white/50"
             />
         </div>
     );
@@ -270,8 +270,30 @@ function SettingsSlider({ label, value, onChange }: { label: string, value: numb
 
 function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, setSelectedDevice, monitorDevice, monitorGain, broadcastGain, theme }: any) {
     const isBroadcasting = host.status === 'broadcasting';
+    const [showAudioPrompt, setShowAudioPrompt] = useState(false);
+    const [originalDevices, setOriginalDevices] = useState<{ input: string, output: string } | null>(null);
 
-    const handleStart = () => {
+    const handleStart = async () => {
+        try {
+            const currentInput = await invoke<string>('get_default_audio_device', { isInput: true });
+            const currentOutput = await invoke<string>('get_default_audio_device', { isInput: false });
+
+            const isBlackHole = currentInput.toLowerCase().includes('blackhole');
+            const isTestDev = currentOutput.toLowerCase().includes('test dev');
+
+            if (!isBlackHole || !isTestDev) {
+                setOriginalDevices({ input: currentInput, output: currentOutput });
+                setShowAudioPrompt(true);
+                return;
+            }
+        } catch (e) {
+            console.error('Failed to get audio devices', e);
+        }
+
+        startActualHost();
+    };
+
+    const startActualHost = () => {
         host.startHost({
             deviceName: selectedDevice || null,
             name: broadcastName || null,
@@ -283,6 +305,30 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
         });
     };
 
+    const handleAutoSwitch = async () => {
+        try {
+            await invoke('set_default_audio_device', { isInput: false, name: 'blackhole' });
+            // await invoke('set_default_audio_device', { isInput: false, name: 'test dev' });
+        } catch (e) {
+            console.error('Failed to auto switch', e);
+        }
+        setShowAudioPrompt(false);
+        setTimeout(() => startActualHost(), 500);
+    };
+
+    const handleStop = async () => {
+        host.stopHost();
+        if (originalDevices) {
+            try {
+                await invoke('set_default_audio_device', { isInput: true, name: originalDevices.input });
+                await invoke('set_default_audio_device', { isInput: false, name: originalDevices.output });
+            } catch (e) {
+                console.error('Failed to restore audio devices', e);
+            }
+            setOriginalDevices(null);
+        }
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -290,7 +336,7 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
             exit={{ opacity: 0, y: -10 }}
             className="flex flex-col items-center"
         >
-            <div className="mb-10 text-center w-full">
+            <div className="w-full mb-10 text-center">
                 <input
                     type="text"
                     value={broadcastName}
@@ -303,21 +349,21 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
             </div>
 
             {!isBroadcasting ? (
-                <div className="w-full space-y-6 flex flex-col items-center">
+                <div className="flex flex-col items-center w-full space-y-6">
                     <div className="w-full">
-                        <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-2">Input Source</label>
+                        <label className="block px-2 mb-3 text-xs font-semibold tracking-wider uppercase text-zinc-500">Input Source</label>
                         <div className="relative">
                             <select
                                 value={selectedDevice}
                                 onChange={(e) => setSelectedDevice(e.target.value)}
-                                className="w-full appearance-none bg-zinc-900/50 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white focus:outline-none focus:border-white/30 transition-colors cursor-pointer"
+                                className="w-full px-5 py-4 text-sm text-white transition-colors border appearance-none cursor-pointer bg-zinc-900/50 border-white/10 rounded-2xl focus:outline-none focus:border-white/30"
                             >
                                 <option value="">System Default</option>
                                 {host.devices.map((d: any) => (
                                     <option key={d.name} value={d.name}>{d.is_loopback ? `[System] ${d.name}` : d.name}</option>
                                 ))}
                             </select>
-                            <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500">
+                            <div className="absolute -translate-y-1/2 pointer-events-none right-5 top-1/2 text-zinc-500">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
                             </div>
                         </div>
@@ -336,14 +382,37 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
                     </button>
                 </div>
             ) : (
-                <div className="w-full flex justify-center py-6">
-                    <div className="relative group cursor-pointer" onClick={host.stopHost}>
+                <div className="flex justify-center w-full py-6">
+                    <div className="relative cursor-pointer group" onClick={handleStop}>
                         <div className={`absolute inset-0 ${theme.glow} rounded-full blur-xl animate-pulse`} />
                         <div className={`relative w-32 h-32 rounded-full border-2 ${theme.border} flex flex-col items-center justify-center ${theme.text} ${theme.hoverBg} transition-colors bg-[#141415]`}>
                             <span className="text-sm font-bold tracking-widest uppercase">On Air</span>
                             <span className="text-[10px] uppercase mt-1 opacity-70 group-hover:opacity-100 transition-opacity">Tap to Stop</span>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {showAudioPrompt && (
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#141415]/90 backdrop-blur-md rounded-[32px] p-6 text-center animate-in fade-in duration-200">
+                    <div className="flex items-center justify-center w-12 h-12 mb-4 rounded-full bg-white/10">
+                        <Headphones className="text-white" size={24} />
+                    </div>
+                    <p className="mb-6 font-medium text-white">Resound needs to route your audio to share it</p>
+
+                    <button
+                        onClick={handleAutoSwitch}
+                        className="bg-white text-black px-6 py-3 rounded-xl font-medium shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:scale-105 active:scale-95 transition-transform flex items-center gap-2"
+                    >
+                        <span>👉</span> Switch Audio Automatically
+                    </button>
+
+                    <button
+                        onClick={() => setShowAudioPrompt(false)}
+                        className="mt-6 text-xs transition-colors text-zinc-500 hover:text-white"
+                    >
+                        Cancel
+                    </button>
                 </div>
             )}
         </motion.div>
@@ -373,15 +442,15 @@ function ListenView({ receiver, outputGain }: any) {
             exit={{ opacity: 0, y: -10 }}
             className="flex flex-col items-center w-full min-h-[300px]"
         >
-            <div className="mb-8 text-center w-full relative">
-                <h2 className="text-xl font-medium text-white mb-2">Listen</h2>
+            <div className="relative w-full mb-8 text-center">
+                <h2 className="mb-2 text-xl font-medium text-white">Listen</h2>
                 <p className="text-sm text-zinc-400">Discover and play local broadcasts.</p>
 
                 {!isReceiving && (
                     <button
                         onClick={() => receiver.discoverHosts()}
                         disabled={isDiscovering}
-                        className="absolute right-0 top-0 p-2 text-zinc-400 hover:text-white disabled:opacity-50 transition-colors focus:outline-none"
+                        className="absolute top-0 right-0 p-2 transition-colors text-zinc-400 hover:text-white disabled:opacity-50 focus:outline-none"
                     >
                         <RefreshCw size={18} className={isDiscovering ? 'animate-spin' : ''} />
                     </button>
@@ -389,15 +458,15 @@ function ListenView({ receiver, outputGain }: any) {
             </div>
 
             {!isReceiving ? (
-                <div className="w-full flex-1 flex flex-col">
-                    <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-2">Available Broadcasts</label>
+                <div className="flex flex-col flex-1 w-full">
+                    <label className="block px-2 mb-4 text-xs font-semibold tracking-wider uppercase text-zinc-500">Available Broadcasts</label>
 
-                    <div className="space-y-3 w-full">
+                    <div className="w-full space-y-3">
                         {receiver.hosts.length === 0 ? (
-                            <div className="py-12 flex flex-col items-center justify-center border border-dashed border-white/10 rounded-2xl bg-white/5">
-                                <Radio size={24} className="text-zinc-600 mb-3" />
+                            <div className="flex flex-col items-center justify-center py-12 border border-dashed border-white/10 rounded-2xl bg-white/5">
+                                <Radio size={24} className="mb-3 text-zinc-600" />
                                 <span className="text-sm text-zinc-400">No broadcasts found</span>
-                                <span className="text-xs text-zinc-600 mt-1">Make sure a host is on the same network.</span>
+                                <span className="mt-1 text-xs text-zinc-600">Make sure a host is on the same network.</span>
                             </div>
                         ) : (
                             receiver.hosts.map((hostNode: any, i: number) => {
@@ -406,14 +475,14 @@ function ListenView({ receiver, outputGain }: any) {
                                     <button
                                         key={i}
                                         onClick={() => handleConnect(hostNode)}
-                                        className="w-full flex items-center justify-between p-4 rounded-2xl bg-zinc-900/50 border border-white/5 hover:bg-white/5 hover:border-white/20 transition-all group text-left focus:outline-none focus:ring-2 focus:ring-white/20"
+                                        className="flex items-center justify-between w-full p-4 text-left transition-all border rounded-2xl bg-zinc-900/50 border-white/5 hover:bg-white/5 hover:border-white/20 group focus:outline-none focus:ring-2 focus:ring-white/20"
                                     >
                                         <div className="flex items-center gap-4">
                                             <div className={`w-10 h-10 rounded-full ${hostTheme.iconBg} ${hostTheme.text} flex items-center justify-center`}>
                                                 <Headphones size={20} />
                                             </div>
                                             <div>
-                                                <div className="font-medium text-white text-sm">{hostNode.name}</div>
+                                                <div className="text-sm font-medium text-white">{hostNode.name}</div>
                                                 <div className="text-[11px] text-zinc-500 mt-0.5">{hostNode.ip}</div>
                                             </div>
                                         </div>
@@ -427,13 +496,13 @@ function ListenView({ receiver, outputGain }: any) {
                     </div>
                 </div>
             ) : (
-                <div className="w-full flex flex-col items-center justify-center flex-1 py-4">
+                <div className="flex flex-col items-center justify-center flex-1 w-full py-4">
                     <div className="relative w-32 h-32 mb-8">
                         <div className={`absolute inset-0 ${activeTheme.glowLight} rounded-full blur-xl animate-pulse`} />
                         <div className={`absolute inset-4 rounded-full border ${activeTheme.borderPing1} animate-[ping_3s_ease-out_infinite]`} />
                         <div className={`absolute inset-8 rounded-full border ${activeTheme.borderPing2} animate-[ping_3s_ease-out_infinite_500ms]`} />
                         <div className={`relative w-full h-full rounded-full bg-zinc-900 flex items-center justify-center ${activeTheme.text} border border-white/5 shadow-xl overflow-hidden`}>
-                            <div className="flex gap-1 items-end h-8">
+                            <div className="flex items-end h-8 gap-1">
                                 {[1, 2, 3, 4, 5].map((i) => (
                                     <motion.div
                                         key={i}
@@ -446,8 +515,8 @@ function ListenView({ receiver, outputGain }: any) {
                         </div>
                     </div>
 
-                    <div className="text-center mb-8">
-                        <div className="text-zinc-400 text-xs mb-1 uppercase tracking-widest font-semibold">Listening To</div>
+                    <div className="mb-8 text-center">
+                        <div className="mb-1 text-xs font-semibold tracking-widest uppercase text-zinc-400">Listening To</div>
                         <div className="text-xl font-medium text-white">{activeHostName}</div>
                     </div>
 

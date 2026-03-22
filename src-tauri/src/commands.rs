@@ -295,3 +295,13 @@ pub async fn stop_receiver() -> Result<(), String> {
 pub fn get_device_id() -> String {
     machine_uid::get().unwrap_or_else(|_| "unknown-device".to_string())
 }
+
+#[tauri::command]
+pub fn get_default_audio_device(is_input: bool) -> Result<String, String> {
+    crate::macos_audio::get_default_device(is_input)
+}
+
+#[tauri::command]
+pub fn set_default_audio_device(is_input: bool, name: String) -> Result<(), String> {
+    crate::macos_audio::set_default_device(is_input, &name)
+}

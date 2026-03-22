@@ -24,6 +24,7 @@ pub(crate) const WS_PATH: &str = "/ws";
 pub(crate) const TARGET_DELAY_MS: u32 = 50;
 
 mod commands;
+mod macos_audio;
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct DiscoveredHost {
@@ -415,7 +416,9 @@ pub fn run() {
       commands::list_output_devices,
       commands::start_receiver,
       commands::stop_receiver,
-      commands::get_device_id
+      commands::get_device_id,
+      commands::get_default_audio_device,
+      commands::set_default_audio_device
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

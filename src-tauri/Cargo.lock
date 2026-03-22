@@ -102,6 +102,8 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "core-foundation-sys",
+ "coreaudio-sys",
  "cpal",
  "futures-util",
  "local-ip-address",

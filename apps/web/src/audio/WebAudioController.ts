@@ -11,6 +11,8 @@ export class WebAudioController {
   private workletNode: AudioWorkletNode | null = null;
   private options: WebAudioControllerOptions;
   private isReceiving = false;
+  private nextStartTime = 0;
+  private useWorklet = true;
 
   constructor(options: WebAudioControllerOptions) {
     this.options = options;
@@ -42,19 +44,28 @@ export class WebAudioController {
         await this.audioContext.resume();
       }
 
-      // Load and add the worklet
-      const workletUrl = new URL("./processor.ts", import.meta.url).href;
-      await this.audioContext.audioWorklet.addModule(workletUrl);
-      this.options.onLog("Worklet loaded successfully");
-      console.log("Worklet loaded successfully");
-      this.workletNode = new AudioWorkletNode(
-        this.audioContext,
-        "resound-processor",
-        {
-          outputChannelCount: [channels],
-        },
-      );
-      this.workletNode.connect(this.audioContext.destination);
+      if (this.audioContext.audioWorklet) {
+        this.options.onLog("AudioWorklet supported. Loading module...");
+        const workletUrl = new URL("./processor.ts", import.meta.url).href;
+        await this.audioContext.audioWorklet.addModule(workletUrl);
+        this.options.onLog("Worklet loaded successfully");
+
+        this.workletNode = new AudioWorkletNode(
+          this.audioContext,
+          "resound-processor",
+          {
+            outputChannelCount: [channels],
+          },
+        );
+        this.workletNode.connect(this.audioContext.destination);
+        this.useWorklet = true;
+      } else {
+        this.options.onLog(
+          "AudioWorklet NOT supported (Insecure context?). Using legacy fallback.",
+        );
+        this.useWorklet = false;
+        this.nextStartTime = this.audioContext.currentTime;
+      }
 
       const wsUrl = `ws://${hostIp}:${hostPort}/ws`;
       this.options.onLog(`Connecting to ${wsUrl}...`);
@@ -86,21 +97,23 @@ export class WebAudioController {
             return;
           }
 
-          const view = new DataView(event.data);
-          const timestamp = Number(view.getBigUint64(0, true));
-
           const pcmData = new Float32Array(audioBytes);
           if (packetCount % 100 === 0) {
             this.options.onLog(
               `Received 100 packets. Last: ${pcmData.length} samples (${channels} ch).`,
             );
           }
-          this.workletNode?.port.postMessage({
-            type: "audio-data",
-            payload: pcmData,
-            channels,
-            sampleRate,
-          });
+
+          if (this.useWorklet && this.workletNode) {
+            this.workletNode.port.postMessage({
+              type: "audio-data",
+              payload: pcmData,
+              channels,
+              sampleRate,
+            });
+          } else if (this.audioContext) {
+            this.playFallback(pcmData, channels, sampleRate);
+          }
         }
       };
 
@@ -119,6 +132,41 @@ export class WebAudioController {
       this.options.onStatusChange("error");
       this.isReceiving = false;
     }
+  }
+
+  private playFallback(
+    data: Float32Array,
+    channels: number,
+    sourceRate: number,
+  ) {
+    if (!this.audioContext) return;
+
+    const numFrames = data.length / channels;
+    const buffer = this.audioContext.createBuffer(
+      channels,
+      numFrames,
+      sourceRate,
+    );
+
+    for (let c = 0; c < channels; c++) {
+      const channelData = buffer.getChannelData(c);
+      for (let i = 0; i < numFrames; i++) {
+        channelData[i] = data[i * channels + c];
+      }
+    }
+
+    const source = this.audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(this.audioContext.destination);
+
+    // Schedule slightly in the future to avoid gaps
+    const now = this.audioContext.currentTime;
+    if (this.nextStartTime < now) {
+      this.nextStartTime = now + 0.1; // 100ms head start
+    }
+
+    source.start(this.nextStartTime);
+    this.nextStartTime += buffer.duration;
   }
 
   stop() {

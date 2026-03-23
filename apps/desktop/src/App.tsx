@@ -327,7 +327,7 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
         try {
             await invoke('set_system_volume', { volume: 100 }).catch(e => console.error("Volume failed", e));
             await invoke('set_default_audio_device', { isInput: false, name: 'blackhole' });
-            await invoke('set_default_audio_device', { isInput: false, name: 'resound audio' });
+            // await invoke('set_default_audio_device', { isInput: false, name: 'resound audio' });
         } catch (e) {
             console.error('Failed to auto switch', e);
         }

@@ -120,6 +120,7 @@ dependencies = [
  "time",
  "tokio",
  "tokio-tungstenite 0.21.0",
+ "tower-http",
 ]
 
 [[package]]

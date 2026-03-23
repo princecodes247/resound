@@ -11,6 +11,8 @@ use tokio::net::TcpListener;
 use serde::Serialize;
 use cpal::traits::{DeviceTrait, HostTrait};
 use super::{AudioStream, DiscoveredHost, MDNS_DAEMON, SERVICE_TYPE, SIGNALING_STATE, STARTED_SESSION_ID, SERVER_SHUTDOWN, WS_PATH, websocket_handler, info_handler};
+use tower_http::cors::CorsLayer;
+use axum::http::Method;
 
 const WS_SCHEME_PORT_FALLBACK: u16 = 0;
 
@@ -103,7 +105,11 @@ pub async fn start_host(
   tokio::spawn(async move {
     let app = Router::new()
         .route(WS_PATH, get(websocket_handler))
-        .route("/info", get(info_handler));
+        .route("/info", get(info_handler))
+        .layer(CorsLayer::new()
+            .allow_origin(tower_http::cors::Any)
+            .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+            .allow_headers(tower_http::cors::Any));
     let server = axum::serve(listener, app);
     if let Err(e) = server.with_graceful_shutdown(async {
       rx.await.ok();

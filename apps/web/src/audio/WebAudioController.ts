@@ -161,8 +161,14 @@ export class WebAudioController {
 
     // Schedule slightly in the future to avoid gaps
     const now = this.audioContext.currentTime;
+    const targetLeadTime = 0.04; // 40ms head start for local network
+
     if (this.nextStartTime < now) {
-      this.nextStartTime = now + 0.1; // 100ms head start
+      // Underflow: restart with target lead time
+      this.nextStartTime = now + targetLeadTime;
+    } else if (this.nextStartTime > now + 0.3) {
+      // Overflow (Lag): If we are > 300ms ahead, jump forward to catch up
+      this.nextStartTime = now + targetLeadTime;
     }
 
     source.start(this.nextStartTime);

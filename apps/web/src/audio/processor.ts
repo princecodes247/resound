@@ -55,28 +55,37 @@ class ResoundProcessor extends AudioWorkletProcessor {
     const numOutputChannels = output.length;
     const numFrames = output[0].length;
 
+    // Adaptive Jitter Buffer Logic
+    // Target ~50ms of buffer to balance latency and stability
+    const targetBufferFrames = 0.05 * sampleRate;
+    const currentBufferFrames = this.samplesAvailable / this.inputChannels;
+
+    // Adjust ratio gently based on buffer level (0.1% max shift per frame)
+    let driftAdjustment = 1.0;
+    if (this.samplesAvailable > 0) {
+      const delta = currentBufferFrames - targetBufferFrames;
+      // P-controller for buffer size
+      driftAdjustment = 1.0 + (delta / targetBufferFrames) * 0.05;
+      // Clamp to +/- 10% speed change
+      driftAdjustment = Math.max(0.9, Math.min(1.1, driftAdjustment));
+    }
+
+    const effectiveRatio = this.resampleRatio * driftAdjustment;
+
     // Minimum buffer to start (avoid immediate underrun)
-    const minBuffer = Math.max(480 * 10, this.inputChannels * 128 * 4);
+    const minBuffer = Math.max(480 * 4, this.inputChannels * 128 * 2); // ~40ms
 
     if (this.samplesAvailable < minBuffer) {
       return true;
     }
 
     for (let i = 0; i < numFrames; i++) {
-      // We need to read 'resampleRatio' worth of frames from the ring buffer
-      // for every 1 frame of output.
-      // We use linear interpolation between frames.
-
       const baseIndex = Math.floor(this.fractionalIndex);
       const nextIndex = baseIndex + 1;
       const alpha = this.fractionalIndex - baseIndex;
 
-      // Ensure we have enough data in the ring buffer for the current and next frame
-      // (multiplied by channels)
       if (this.samplesAvailable >= (nextIndex + 1) * this.inputChannels) {
         for (let oc = 0; oc < numOutputChannels; oc++) {
-          // If mono input, use channel 0 for both
-          // If stereo input, map directly
           const inIdx1 =
             baseIndex * this.inputChannels +
             (this.inputChannels > 1 ? oc % this.inputChannels : 0);
@@ -92,9 +101,8 @@ class ResoundProcessor extends AudioWorkletProcessor {
           output[oc][i] = s1 + (s2 - s1) * alpha;
         }
 
-        this.fractionalIndex += this.resampleRatio;
+        this.fractionalIndex += effectiveRatio;
 
-        // Advance the readIndex when fractionalIndex crosses an integer
         const framesToAdvance = Math.floor(this.fractionalIndex);
         if (framesToAdvance > 0) {
           this.readIndex =
@@ -104,7 +112,6 @@ class ResoundProcessor extends AudioWorkletProcessor {
           this.fractionalIndex -= framesToAdvance;
         }
       } else {
-        // Underrun
         for (let oc = 0; oc < numOutputChannels; oc++) {
           output[oc][i] = 0;
         }

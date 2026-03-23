@@ -133,10 +133,14 @@ void create_aggregate_device_c(const char* name) {
             kAudioObjectPropertyScopeGlobal,
             kAudioObjectPropertyElementMain
         };
-        UInt32 dictSize = sizeof(CFDictionaryRef);
-        OSStatus err = AudioObjectSetPropertyData(pluginID, &createAddr, 0, NULL, dictSize, &dict);
+        UInt32 qualSize = sizeof(CFDictionaryRef);
+        UInt32 aggOutSize = sizeof(AudioObjectID);
+        AudioObjectID newDeviceID = kAudioObjectUnknown;
+        OSStatus err = AudioObjectGetPropertyData(pluginID, &createAddr, qualSize, &dict, &aggOutSize, &newDeviceID);
         if (err != noErr) {
             NSLog(@"Failed to create aggregate device: %d", err);
+        } else {
+            NSLog(@"Successfully created aggregate device with ID: %u", newDeviceID);
         }
     }
 }

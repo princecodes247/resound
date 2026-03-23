@@ -431,6 +431,8 @@ pub fn run() {
         )?;
       }
 
+      crate::macos_audio::create_aggregate_device("Resound Audio");
+
       let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
       let show_i = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
       let hide_i = MenuItem::with_id(app, "hide", "Hide", true, None::<&str>)?;

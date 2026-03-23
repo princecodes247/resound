@@ -187,6 +187,20 @@ fn get_device_name(id: AudioDeviceID) -> Result<String, String> {
     }
 }
 
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    fn create_aggregate_device_c(name: *const std::ffi::c_char);
+}
+
+#[cfg(target_os = "macos")]
+pub fn create_aggregate_device(name: &str) {
+    if let Ok(c_name) = std::ffi::CString::new(name) {
+        unsafe {
+            create_aggregate_device_c(c_name.as_ptr());
+        }
+    }
+}
+
 #[cfg(not(target_os = "macos"))]
 pub fn get_default_device(is_input: bool) -> Result<String, String> {
     Err("Not implemented for this OS".into())
@@ -196,3 +210,6 @@ pub fn get_default_device(is_input: bool) -> Result<String, String> {
 pub fn set_default_device(is_input: bool, target_name: &str) -> Result<(), String> {
     Err("Not implemented for this OS".into())
 }
+
+#[cfg(not(target_os = "macos"))]
+pub fn create_aggregate_device(name: &str) {}

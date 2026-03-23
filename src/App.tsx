@@ -76,10 +76,10 @@ export default function App() {
     const [broadcastGain, setBroadcastGain] = useState(1.0);
     const [outputGain, setOutputGain] = useState(1.0);
 
-    // Auto-select "test dev" for monitor device if available
+    // Auto-select "Resound Audio" for monitor device if available
     useEffect(() => {
         if (!monitorDevice && host.outputDevices?.length > 0) {
-            const testDev = host.outputDevices.find((d: any) => d.name.toLowerCase().includes('test dev'));
+            const testDev = host.outputDevices.find((d: any) => d.name.toLowerCase().includes('resound audio'));
             if (testDev) {
                 setMonitorDevice(testDev.name);
             }
@@ -289,7 +289,7 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
             const currentOutput = await invoke<string>('get_default_audio_device', { isInput: false });
 
             const isBlackHole = currentInput.toLowerCase().includes('blackhole');
-            const isTestDev = currentOutput.toLowerCase().includes('test dev');
+            const isTestDev = currentOutput.toLowerCase().includes('resound audio');
 
             if (!isBlackHole || !isTestDev) {
                 const currentVolume = await invoke<number>('get_system_volume').catch(() => null);
@@ -320,7 +320,7 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
         try {
             await invoke('set_system_volume', { volume: 100 }).catch(e => console.error("Volume failed", e));
             await invoke('set_default_audio_device', { isInput: false, name: 'blackhole' });
-            // await invoke('set_default_audio_device', { isInput: false, name: 'test dev' });
+            await invoke('set_default_audio_device', { isInput: false, name: 'resound audio' });
         } catch (e) {
             console.error('Failed to auto switch', e);
         }

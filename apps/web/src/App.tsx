@@ -67,138 +67,15 @@ export default function App() {
 
   return (
     <div className="min-h-[200vh] bg-[#0A0A0B] text-white flex flex-col items-center font-sans selection:bg-accent/30 relative w-full overflow-x-hidden bg-mesh bg-grain">
-      {/* Background glow effects */}
-      <div className="fixed top-0 left-0 z-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className={cn(
-          "absolute top-[20%] left-[-10%] w-[1000px] h-[1000px] rounded-full blur-[180px] opacity-10 transition-colors duration-1000 bg-accent/20",
-          listenGlowClass
-        )} />
-        <div className="absolute top-[-10%] right-[-10%] w-[800px] h-[800px] bg-blue-500/10 rounded-full blur-[140px]" />
-        <div className="absolute bottom-[-20%] left-[20%] w-[1200px] h-[1200px] bg-purple-500/10 rounded-full blur-[160px]" />
-      </div>
+      <CosmicBackground />
 
-      {/* Hero Section */}
-      <motion.section
-        style={{ opacity, scale }}
-        className="relative z-10 flex flex-col items-center justify-center w-full h-screen px-6 overflow-hidden"
-      >
-        {/* Animated Background Elements */}
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          {[...Array(3)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute border rounded-full top-1/2 left-1/2 border-white/5"
-              style={{
-                width: 400 + i * 200,
-                height: 400 + i * 200,
-                x: "-50%",
-                y: "-50%",
-              }}
-              animate={{
-                rotate: [0, 360],
-                scale: [1, 1.05, 1],
-              }}
-              transition={{
-                duration: 20 + i * 10,
-                repeat: Infinity,
-                ease: "linear",
-              }}
-            />
-          ))}
-        </div>
 
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-          className="relative z-10 flex flex-col items-center max-w-5xl text-center"
-        >
-          {/* Resonance Core Visualization */}
-          <div className="relative w-32 h-32 mb-12">
-            <motion.div
-              animate={{
-                scale: [1, 1.4, 1],
-                opacity: [0.3, 0.6, 0.3],
-                rotate: [0, 180, 360]
-              }}
-              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-              className="absolute inset-0 rounded-full bg-gradient-to-tr from-accent to-blue-500 blur-2xl"
-            />
-            <div className="absolute flex items-center justify-center border rounded-full inset-2 bg-black/80 backdrop-blur-xl border-white/20">
-              <Activity size={40} className="text-accent text-glow" />
-            </div>
-
-            {/* Orbital Rings */}
-            {[...Array(3)].map((_, i) => (
-              <motion.div
-                key={i}
-                className="absolute inset-[-20px] rounded-full border border-white/10"
-                style={{ rotate: i * 45 }}
-                animate={{ rotate: [i * 45, i * 45 + 360] }}
-                transition={{ duration: 15 + i * 5, repeat: Infinity, ease: "linear" }}
-              />
-            ))}
-          </div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.8 }}
-          >
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 mb-8 border glass rounded-full text-accent shadow-[0_0_20px_rgba(var(--accent),0.1)]">
-              <div className="w-1.5 h-1.5 rounded-full bg-accent animate-ping" />
-              <span className="text-[10px] font-black tracking-[0.4em] uppercase">Phase 1: Zero Latency</span>
-            </div>
-
-            <h1 className="mb-8 font-black leading-none tracking-tighter text-7xl md:text-9xl">
-              <span className="inline-block hover:scale-[1.02] transition-transform cursor-default">Resound</span>
-              <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent via-blue-400 to-purple-500 animate-gradient-x bg-[length:200%_200%] text-glow">
-                Web Native
-              </span>
-            </h1>
-
-            <p className="max-w-2xl mx-auto text-lg font-light leading-relaxed tracking-wide mb-14 md:text-2xl text-zinc-400">
-              Experience the future of personal audio.
-              <span className="text-white"> Studio-grade fidelity</span> beamed from your desktop to any device, instantly.
-            </p>
-
-            <div className="flex flex-col items-center justify-center gap-6 sm:flex-row">
-              <button
-                onClick={scrollToApp}
-                className="group relative px-10 py-5 text-sm font-black text-black transition-all rounded-full bg-accent overflow-hidden shadow-[0_0_40px_rgba(var(--accent),0.4)]"
-              >
-                <div className="absolute inset-0 transition-transform duration-300 translate-y-full bg-white/20 group-hover:translate-y-0" />
-                <span className="relative z-10 flex items-center gap-2">
-                  START LISTENING <ChevronDown size={16} className="-rotate-90" />
-                </span>
-              </button>
-              <a
-                href="#"
-                className="px-10 py-5 text-sm font-bold text-white transition-all rounded-full glass hover:bg-white/10 hover:border-white/30"
-              >
-                GET DESKTOP APP
-              </a>
-            </div>
-          </motion.div>
-        </motion.div>
-
-        <motion.div
-          animate={{ y: [0, 15, 0] }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute z-10 bottom-12"
-        >
-          <button onClick={scrollToApp} className="flex flex-col items-center gap-2 transition-colors group text-zinc-500 hover:text-white">
-            <span className="text-[10px] font-black tracking-[0.3em] uppercase opacity-50 group-hover:opacity-100 transition-opacity">SCROLL TO CONNECT</span>
-            <ChevronDown size={24} className="stroke-[1.5px]" />
-          </button>
-        </motion.div>
-      </motion.section>
+      <HeroSection onScrollToApp={scrollToApp} />
 
       {/* App Section */}
       <section
         ref={appSectionRef}
-        className="relative z-10 flex flex-col items-center w-full min-h-screen px-6 pt-20 pb-40"
+        className="relative z-10 flex flex-col items-center w-full min-h-screen px-6 pt-20 pb-40 -mt-28"
       >
         <div className="w-full max-w-xl">
           <div className="mb-12 text-center">
@@ -207,7 +84,7 @@ export default function App() {
           </div>
 
           {/* Main Interface */}
-          <div className="w-full bg-[#141415]/60 backdrop-blur-2xl border border-white/5 rounded-[40px] p-1 shadow-2xl overflow-hidden group hover:border-white/10 transition-colors">
+          <div className="w-full bg-[#141415]/60 backdrop-blur-2xl border border-white/5 rounded-[40px] shadow-2xl overflow-hidden group hover:border-white/10 transition-colors">
             <div className="p-8 md:p-10">
               <ListenView receiver={receiver} />
             </div>
@@ -386,7 +263,7 @@ const ListenView = memo(({ receiver }: ListenViewProps) => {
                 }}
                 className="px-6 py-4 text-sm font-bold text-black transition-all bg-white shadow-lg rounded-2xl hover:bg-accent hover:scale-105 active:scale-95"
               >
-                Probe
+                Connect
               </button>
             </div>
           </div>
@@ -446,3 +323,194 @@ const ListenView = memo(({ receiver }: ListenViewProps) => {
   );
 });
 
+// Icons
+const OrbitIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10" strokeDasharray="4 4" />
+  </svg>
+);
+
+const SignalIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+    <path d="M12 20a8 8 0 1 1 0-16 8 8 0 0 1 0 16z" />
+    <path d="M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" opacity="0.5" />
+    <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+  </svg>
+);
+
+const WaveIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+    <path d="M2 10c3-3 6 2 9-2s6 5 9 2" />
+    <path d="M2 14c3-3 6 2 9-2s6 5 9 2" opacity="0.5" />
+  </svg>
+);
+
+const DisconnectIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M15 9l-6 6M9 9l6 6" />
+  </svg>
+);
+
+const ScanIcon = ({ className, animate }: { className?: string; animate?: boolean }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+    <circle cx="11" cy="11" r="8" />
+    <path d="M21 21l-4.35-4.35" />
+    {animate && (
+      <>
+        <circle cx="11" cy="11" r="10" strokeOpacity="0.3" className="animate-ping" />
+        <circle cx="11" cy="11" r="12" strokeOpacity="0.1" className="animate-ping animation-delay-1000" />
+      </>
+    )}
+  </svg>
+);
+
+const ArrowRightIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+    <path d="M5 12h14M12 5l7 7-7 7" />
+  </svg>
+);
+
+const ChevronDownIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+    <path d="M6 9l6 6 6-6" />
+  </svg>
+);
+
+const DownloadIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+  </svg>
+);
+
+const AppleIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+  </svg>
+);
+
+const WindowsIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M3 12V6.75l6-1.32v6.48L3 12m17-9v8.75l-10 .15V5.21L20 3M3 13l6 .09v6.81l-6-1.15V13m17 .25V22l-10-1.91V13.1l10 .15z" />
+  </svg>
+);
+
+const LinuxIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M12.504 0c-.155 0-.315.008-.48.021-1.907.143-3.847.455-5.288 1.097-1.192.521-2.232 1.33-2.79 2.487-.29.598-.427 1.255-.457 1.916-.04.884.068 1.783.266 2.65.235 1.02.576 2.018.905 3.01.33.993.65 1.975.868 2.975.22 1.01.33 2.04.27 3.07-.03.485-.12.964-.27 1.43-.29.893-.792 1.7-1.43 2.36-.37.383-.795.72-1.26 1.007-.47.28-.978.507-1.51.678-.53.17-1.09.287-1.655.348-.26.03-.52.05-.78.05-.26 0-.52-.02-.78-.05l-.08-.01c.17.33.37.64.6.93.57.7 1.3 1.28 2.12 1.7 1.18.6 2.5.9 3.82.97.66.04 1.32.02 1.97-.06 1.3-.15 2.57-.5 3.76-1.03 1.18-.53 2.27-1.24 3.24-2.1.96-.86 1.8-1.88 2.47-3.02.67-1.13 1.15-2.39 1.42-3.71.13-.66.2-1.33.2-2 0-.67-.07-1.34-.2-2-.27-1.32-.75-2.58-1.42-3.71-.67-1.14-1.51-2.16-2.47-3.02-.97-.86-2.06-1.57-3.24-2.1-1.19-.53-2.46-.88-3.76-1.03-.32-.04-.64-.06-.97-.06z" />
+  </svg>
+);
+
+// Theme colors
+const HOST_THEMES = [
+  { accent: '#06b6d4', glow: 'rgba(6, 182, 212, 0.5)' },
+  { accent: '#8b5cf6', glow: 'rgba(139, 92, 246, 0.5)' },
+  { accent: '#ec4899', glow: 'rgba(236, 72, 153, 0.5)' },
+  { accent: '#3b82f6', glow: 'rgba(59, 130, 246, 0.5)' },
+  { accent: '#14b8a6', glow: 'rgba(20, 184, 166, 0.5)' },
+  { accent: '#6366f1', glow: 'rgba(99, 102, 241, 0.5)' },
+] as const;
+
+function getHostTheme(seed: string) {
+  if (!seed) return HOST_THEMES[0];
+  let hash = 5381;
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) + hash) + seed.charCodeAt(i);
+  }
+  return HOST_THEMES[Math.abs(hash) % HOST_THEMES.length];
+}
+
+// Animated Background
+const CosmicBackground = memo(() => (
+  <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+    <div className="cosmic-bg" />
+    <div className="starfield" />
+    <div className="absolute top-0 left-1/4 w-96 h-96 bg-aurora-purple/20 rounded-full blur-[120px] animate-pulse-slow" />
+    <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-aurora-cyan/15 rounded-full blur-[100px] animate-pulse-slow animation-delay-2000" />
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-aurora-pink/10 rounded-full blur-[150px] animate-breathe" />
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] border border-white/[0.02] rounded-full animate-spin-slow" />
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-white/[0.03] rounded-full animate-spin-slow animation-delay-2000" style={{ animationDirection: 'reverse' }} />
+  </div>
+));
+
+// Status Badge
+const StatusBadge = ({ status }: { status: string }) => {
+  const config = useMemo(() => {
+    switch (status) {
+      case 'receiving':
+        return { icon: <span className="w-2 h-2 rounded-full bg-aurora-cyan animate-pulse" />, text: 'LIVE', className: 'text-aurora-cyan border-aurora-cyan/30 bg-aurora-cyan/10' };
+      case 'connecting':
+        return { icon: <ScanIcon className="w-3 h-3 animate-spin" />, text: 'CONNECTING', className: 'text-amber-400 border-amber-400/30 bg-amber-400/10' };
+      case 'discovering':
+        return { icon: <ScanIcon className="w-3 h-3" animate />, text: 'SCANNING', className: 'text-aurora-purple border-aurora-purple/30 bg-aurora-purple/10' };
+      default:
+        return { icon: <span className="w-2 h-2 rounded-full bg-stellar-dim" />, text: 'STANDBY', className: 'text-stellar-dim border-white/10 bg-white/5' };
+    }
+  }, [status]);
+
+  return (
+    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[10px] font-semibold tracking-widest ${config.className}`}>
+      {config.icon}
+      {config.text}
+    </div>
+  );
+};
+
+const HeroSection = ({ onScrollToApp }: { onScrollToApp: () => void }) => {
+  return (
+    <section className="relative flex flex-col items-center justify-center min-h-screen px-6 overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute w-2 h-2 rounded-full top-1/4 left-1/4 bg-aurora-cyan/50 animate-pulse" />
+        <div className="absolute w-1 h-1 rounded-full top-1/3 right-1/3 bg-aurora-purple/50 animate-pulse animation-delay-1000" />
+        <div className="absolute bottom-1/3 left-1/3 w-1.5 h-1.5 rounded-full bg-aurora-pink/50 animate-pulse animation-delay-2000" />
+      </div>
+
+      <div className="relative z-10 max-w-5xl mx-auto text-center">
+        <h1 className="mb-6 text-6xl font-bold tracking-tight md:text-8xl lg:text-9xl font-display animate-fade-in-up">
+          <span className="text-white">Resound</span>
+        </h1>
+
+        <p className="max-w-2xl mx-auto mb-12 text-xl leading-relaxed md:text-2xl text-stellar-silver animate-fade-in-up animation-delay-200">
+          Stream audio across your local network with
+          <span className="text-stellar-white"> studio-grade fidelity</span>
+        </p>
+
+        <div className="flex flex-col items-center justify-center gap-4 mb-16 sm:flex-row animate-fade-in-up animation-delay-300">
+          <button
+            onClick={onScrollToApp}
+            className="flex items-center gap-3 px-8 py-4 text-lg font-semibold text-white rounded-full aurora-btn"
+          >
+            <SignalIcon className="relative z-10 w-5 h-5" />
+            <span className="relative z-10">Connect to Host</span>
+          </button>
+          <a
+            href="#download"
+            className="flex items-center gap-3 px-8 py-4 text-lg font-semibold transition-all border rounded-full glass-prism text-stellar-white hover:bg-white/10 border-white/20"
+          >
+            <DownloadIcon className="w-5 h-5" />
+            Get Desktop App
+          </a>
+        </div>
+
+        {/* <div id="download" className="max-w-3xl p-8 mx-auto glass-prism rounded-3xl animate-fade-in-up animation-delay-400">
+          <p className="mb-6 text-sm tracking-widest uppercase text-stellar-dim">Download for your platform</p>
+          <div className="grid grid-cols-3 gap-4">
+            <a href="#" className="flex items-center gap-3 px-6 py-3 transition-all border group rounded-2xl bg-white/5 hover:bg-white/10 border-white/5 hover:border-aurora-cyan/30">
+              <AppleIcon className="w-8 h-8 transition-colors text-stellar-silver group-hover:text-aurora-cyan" />
+              <span className="text-sm font-medium text-stellar-silver group-hover:text-stellar-white">macOS</span>
+            </a>
+            <a href="#" className="flex items-center gap-3 px-6 py-3 transition-all border group rounded-2xl bg-white/5 hover:bg-white/10 border-white/5 hover:border-aurora-purple/30">
+              <WindowsIcon className="w-8 h-8 transition-colors text-stellar-silver group-hover:text-aurora-purple" />
+              <span className="text-sm font-medium text-stellar-silver group-hover:text-stellar-white">Windows</span>
+            </a>
+            <a href="#" className="flex items-center gap-3 px-6 transition-all border group rounded-2xl bg-white/5 hover:bg-white/10 border-white/5 hover:border-aurora-pink/30">
+              <LinuxIcon className="w-8 h-8 transition-colors text-stellar-silver group-hover:text-aurora-pink" />
+              <span className="text-sm font-medium text-stellar-silver group-hover:text-stellar-white">Linux</span>
+            </a>
+          </div>
+        </div> */}
+      </div>
+    </section>
+  );
+};

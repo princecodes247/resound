@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { invoke } from '@tauri-apps/api/core';
+import { QRCodeCanvas } from 'qrcode.react';
 
 // --- Utility ---
 function cn(...inputs: ClassValue[]) {
@@ -413,13 +414,20 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
                         </div>
                     </div>
 
-                    <div className="w-full max-w-sm p-4 text-center border bg-white/5 border-white/10 rounded-2xl">
-                        <p className="text-[10px] font-semibold tracking-widest uppercase text-zinc-500 mb-2">Web Client Connection</p>
+                    <div className="flex flex-col items-center w-full max-w-sm gap-4 p-6 text-center border bg-white/5 border-white/10 rounded-3xl">
+                        <div className="p-3 bg-white shadow-xl rounded-2xl">
+                            <QRCodeCanvas
+                                value={`http://${localIp}:5174/?host=${localIp}:${host.signalingPort}&sid=${host.sessionId}`}
+                                size={140}
+                                level="M"
+                            />
+                        </div>
                         <div className="flex flex-col items-center gap-1">
+                            <p className="text-[10px] font-semibold tracking-widest uppercase text-zinc-500 mb-1">Web Client Connection</p>
                             <code className="font-mono text-sm text-zinc-300">
                                 {localIp ? `${localIp}:${host.signalingPort || '...'}` : 'Loading IP...'}
                             </code>
-                            <p className="text-[9px] text-zinc-500">Enter this address on the web client to join.</p>
+                            <p className="text-[9px] text-zinc-500 max-w-[200px] mt-1">Scan the code or enter the address on your mobile device to join.</p>
                         </div>
                     </div>
                 </div>

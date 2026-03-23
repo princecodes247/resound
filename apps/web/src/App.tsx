@@ -36,7 +36,18 @@ export default function App() {
   const isListening = receiver.status === 'receiving' || receiver.status === 'connecting';
 
   useEffect(() => {
-    if (!isListening) {
+    const params = new URLSearchParams(window.location.search);
+    const hostParam = params.get('host');
+
+    if (hostParam && !isListening) {
+      const [ip, portStr] = hostParam.split(':');
+      const port = portStr ? parseInt(portStr) : 42069;
+      if (ip) {
+        receiver.probeHost(ip, port);
+        // Clean up URL
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    } else if (!isListening) {
       receiver.discoverHosts();
     }
   }, [isListening]);

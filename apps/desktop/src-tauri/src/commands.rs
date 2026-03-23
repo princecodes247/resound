@@ -10,7 +10,7 @@ use tokio::net::TcpListener;
 
 use serde::Serialize;
 use cpal::traits::{DeviceTrait, HostTrait};
-use super::{AudioStream, DiscoveredHost, MDNS_DAEMON, SERVICE_TYPE, SIGNALING_STATE, STARTED_SESSION_ID, SERVER_SHUTDOWN, WS_PATH, websocket_handler};
+use super::{AudioStream, DiscoveredHost, MDNS_DAEMON, SERVICE_TYPE, SIGNALING_STATE, STARTED_SESSION_ID, SERVER_SHUTDOWN, WS_PATH, websocket_handler, info_handler};
 
 const WS_SCHEME_PORT_FALLBACK: u16 = 0;
 
@@ -101,7 +101,9 @@ pub async fn start_host(
   *SERVER_SHUTDOWN.lock().unwrap() = Some(tx);
 
   tokio::spawn(async move {
-    let app = Router::new().route(WS_PATH, get(websocket_handler));
+    let app = Router::new()
+        .route(WS_PATH, get(websocket_handler))
+        .route("/info", get(info_handler));
     let server = axum::serve(listener, app);
     if let Err(e) = server.with_graceful_shutdown(async {
       rx.await.ok();

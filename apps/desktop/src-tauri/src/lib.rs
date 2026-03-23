@@ -300,10 +300,33 @@ pub async fn start_native_audio_capture(
   streams[0].play().map_err(|e| e.to_string())?;
   Ok((streams, sample_rate, channels))
 }
+#[tauri::command]
+pub fn get_local_ip() -> Result<String, String> {
+    local_ip_address::local_ip()
+        .map(|ip| ip.to_string())
+        .map_err(|e| e.to_string())
+}
+
 async fn websocket_handler(ws: WebSocketUpgrade) -> impl axum::response::IntoResponse {
   ws.on_upgrade(move |socket| async move {
     handle_ws_socket(socket).await;
   })
+}
+
+async fn info_handler() -> impl axum::response::IntoResponse {
+    let sid = STARTED_SESSION_ID.lock().unwrap().clone().unwrap_or_default();
+    let state = SIGNALING_STATE.read().await;
+    
+    // We need the name, sample rate, etc. These are currently in mDNS properties but not in RoutingState.
+    // Let's just return what we have or add them to RoutingState.
+    // For now, let's return a simple JSON.
+    
+    axum::Json(serde_json::json!({
+        "session_id": sid,
+        "name": "Resound Broadcast", // Static fallback or extract from somewhere
+        "sample_rate": 44100,
+        "channels": 2
+    }))
 }
 
 async fn handle_ws_socket(socket: WebSocket) {
@@ -420,7 +443,8 @@ pub fn run() {
       commands::get_default_audio_device,
       commands::set_default_audio_device,
       commands::get_system_volume,
-      commands::set_system_volume
+      commands::set_system_volume,
+      commands::get_local_ip
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

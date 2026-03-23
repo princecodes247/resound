@@ -39,7 +39,7 @@ export default function App() {
     if (!isListening) {
       receiver.discoverHosts();
     }
-  }, [isListening, receiver]);
+  }, [isListening]);
 
   const listenGlowClass = receiver.status === 'receiving' && receiver.selectedHost
     ? getThemeForString(receiver.selectedHost.name).bg
@@ -48,7 +48,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#0A0A0B] text-white flex flex-col items-center p-6 font-sans selection:bg-white/20 relative w-full overflow-hidden">
       {/* Background glow effects */}
-      <div className="fixed top-0 left-0 w-full h-full z-0 pointer-events-none">
+      <div className="fixed top-0 left-0 z-0 w-full h-full pointer-events-none">
         <div className={cn(
           "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full blur-[160px] opacity-20 transition-colors duration-1000",
           listenGlowClass
@@ -57,7 +57,7 @@ export default function App() {
 
       <main className="relative z-10 flex flex-col items-center w-full max-w-md mt-10">
         {/* Header */}
-        <div className="text-center mb-10">
+        <div className="mb-10 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Resound Web</h1>
           <p className="mt-1 text-sm text-zinc-400">Join a local broadcast from any device</p>
         </div>
@@ -115,36 +115,84 @@ function ListenView({ receiver }: { receiver: any }) {
 
           <div className="w-full space-y-3">
             {receiver.hosts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 border border-dashed border-white/10 rounded-2xl bg-white/5">
+              <div className="flex flex-col items-center justify-center py-10 mb-6 border border-dashed border-white/10 rounded-2xl bg-white/5">
                 <Radio size={24} className="mb-3 text-zinc-600" />
                 <span className="text-sm text-zinc-400">No broadcasts found</span>
-                <span className="mt-1 text-xs text-zinc-600">Make sure a host is on the same network.</span>
+                <span className="mt-1 text-xs text-zinc-600">Enter host details below.</span>
               </div>
             ) : (
-              receiver.hosts.map((hostNode: DiscoveredHost, i: number) => {
-                const hostTheme = getThemeForString(hostNode.name);
-                return (
-                  <button
-                    key={i}
-                    onClick={() => handleConnect(hostNode)}
-                    className="flex items-center justify-between w-full p-4 text-left transition-all border rounded-2xl bg-zinc-900/50 border-white/5 hover:bg-white/5 hover:border-white/20 group focus:outline-none focus:ring-2 focus:ring-white/20"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-full ${hostTheme.iconBg} ${hostTheme.text} flex items-center justify-center`}>
-                        <Headphones size={20} />
+              <div className="mb-6 space-y-3">
+                {receiver.hosts.map((hostNode: DiscoveredHost, i: number) => {
+                  const hostTheme = getThemeForString(hostNode.name);
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => handleConnect(hostNode)}
+                      className="flex items-center justify-between w-full p-4 text-left transition-all border rounded-2xl bg-zinc-900/50 border-white/5 hover:bg-white/5 hover:border-white/20 group focus:outline-none focus:ring-2 focus:ring-white/20"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-full ${hostTheme.iconBg} ${hostTheme.text} flex items-center justify-center`}>
+                          <Headphones size={20} />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-white">{hostNode.name}</div>
+                          <div className="text-[11px] text-zinc-500 mt-0.5">{hostNode.ip}:{hostNode.port}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-white">{hostNode.name}</div>
-                        <div className="text-[11px] text-zinc-500 mt-0.5">{hostNode.ip}</div>
+                      <div className={`text-[11px] font-bold uppercase tracking-wider ${hostTheme.text} opacity-0 group-hover:opacity-100 transition-opacity pr-2`}>
+                        Connect
                       </div>
-                    </div>
-                    <div className={`text-[11px] font-bold uppercase tracking-wider ${hostTheme.text} opacity-0 group-hover:opacity-100 transition-opacity pr-2`}>
-                      Connect
-                    </div>
-                  </button>
-                );
-              })
+                    </button>
+                  );
+                })}
+              </div>
             )}
+
+            <div className="w-full h-px my-2 bg-white/5" />
+
+            <div className="space-y-4">
+              <label className="block px-2 text-xs font-semibold tracking-wider uppercase text-zinc-500">Manual Connect</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Host IP (e.g. 192.168.1.10)"
+                  className="flex-1 px-4 py-3 text-sm text-white transition-colors border bg-zinc-900/50 border-white/10 rounded-xl focus:outline-none focus:border-white/30"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const target = e.currentTarget;
+                      const [ip, portStr] = target.value.split(':');
+                      const port = portStr ? parseInt(portStr) : 42069; // Need a way to know the port
+                      if (ip) receiver.probeHost(ip, port);
+                    }
+                  }}
+                  id="manualHostIp"
+                />
+                <button
+                  onClick={() => {
+                    const input = document.getElementById('manualHostIp') as HTMLInputElement;
+                    const [ip, portStr] = input.value.split(':');
+                    const port = portStr ? parseInt(portStr) : 0; // If 0, we might need a better default or logic
+                    if (ip) {
+                      // Try common ports or ask user?
+                      // For now, let's assume they might enter IP:Port
+                      if (port > 0) {
+                        receiver.probeHost(ip, port);
+                      } else {
+                        // Default signaling port is random. This is a problem!
+                        // We should probably make the port fixed or show it on the Host.
+                        receiver.probeHost(ip, 42069); // Tentative default
+                      }
+                    }
+                  }}
+                  className="px-4 py-3 transition-colors border bg-white/5 border-white/10 rounded-xl text-zinc-400 hover:text-white hover:bg-white/10"
+                >
+                  Probe
+                </button>
+              </div>
+              <p className="text-[10px] text-zinc-500 px-2 italic text-center">
+                Note: Ensure the host has "Resound" running and is on the same network.
+              </p>
+            </div>
           </div>
         </div>
       ) : (

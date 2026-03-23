@@ -64,6 +64,13 @@ export default function App() {
     const [showSettings, setShowSettings] = useState(false);
     const [broadcastName, setBroadcastName] = useState('');
     const [selectedDevice, setSelectedDevice] = useState('');
+    const [localIp, setLocalIp] = useState<string | null>(null);
+
+    useEffect(() => {
+        invoke<string>('get_local_ip')
+            .then(setLocalIp)
+            .catch(e => console.error("Failed to get local IP", e));
+    }, []);
 
     useEffect(() => {
         invoke<string>('get_device_id')
@@ -185,6 +192,7 @@ export default function App() {
                                 monitorGain={monitorGain}
                                 broadcastGain={broadcastGain}
                                 theme={myTheme}
+                                localIp={localIp}
                             />
                         ) : (
                             <ListenView
@@ -277,7 +285,7 @@ function SettingsSlider({ label, value, onChange }: { label: string, value: numb
     );
 }
 
-function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, setSelectedDevice, monitorDevice, monitorGain, broadcastGain, theme }: any) {
+function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, setSelectedDevice, monitorDevice, monitorGain, broadcastGain, theme, localIp }: any) {
     const isBroadcasting = host.status === 'broadcasting';
     const [showAudioPrompt, setShowAudioPrompt] = useState(false);
     const [originalDevices, setOriginalDevices] = useState<{ input: string, output: string, volume: number | null } | null>(null);
@@ -396,12 +404,22 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
                     </button>
                 </div>
             ) : (
-                <div className="flex justify-center w-full py-6">
+                <div className="flex flex-col items-center w-full py-6 space-y-6">
                     <div className="relative cursor-pointer group" onClick={handleStop}>
                         <div className={`absolute inset-0 ${theme.glow} rounded-full blur-xl animate-pulse`} />
                         <div className={`relative w-32 h-32 rounded-full border-2 ${theme.border} flex flex-col items-center justify-center ${theme.text} ${theme.hoverBg} transition-colors bg-[#141415]`}>
                             <span className="text-sm font-bold tracking-widest uppercase">On Air</span>
                             <span className="text-[10px] uppercase mt-1 opacity-70 group-hover:opacity-100 transition-opacity">Tap to Stop</span>
+                        </div>
+                    </div>
+
+                    <div className="w-full max-w-sm p-4 text-center border bg-white/5 border-white/10 rounded-2xl">
+                        <p className="text-[10px] font-semibold tracking-widest uppercase text-zinc-500 mb-2">Web Client Connection</p>
+                        <div className="flex flex-col items-center gap-1">
+                            <code className="font-mono text-sm text-zinc-300">
+                                {localIp ? `${localIp}:${host.signalingPort || '...'}` : 'Loading IP...'}
+                            </code>
+                            <p className="text-[9px] text-zinc-500">Enter this address on the web client to join.</p>
                         </div>
                     </div>
                 </div>

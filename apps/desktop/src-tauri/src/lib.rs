@@ -140,12 +140,12 @@ pub async fn start_native_audio_capture(
               first_timestamp = timestamp;
           }
 
-          // aggregate_buf.extend_from_slice(samples);
-let frame_size = 4 * channels as usize;
+          aggregate_buf.extend_from_slice(samples);
+// let frame_size = 4 * channels as usize;
 
-// Ensure we only append full frames
-let aligned_len = samples.len() - (samples.len() % frame_size);
-aggregate_buf.extend_from_slice(&samples[..aligned_len]);
+// // Ensure we only append full frames
+// let aligned_len = samples.len() - (samples.len() % frame_size);
+// aggregate_buf.extend_from_slice(&samples[..aligned_len]);
 
           let frame_size = 4 * channels as usize;
 while aggregate_buf.len() >= target_samples * frame_size {

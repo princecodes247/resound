@@ -46,7 +46,13 @@ export class WebAudioController {
 
       if (this.audioContext.audioWorklet) {
         this.options.onLog("AudioWorklet supported. Loading module...");
-        const workletUrl = new URL("./processor.ts", import.meta.url).href;
+
+        // In dev, use relative path. In prod, use the bundled asset path.
+        const isDev = import.meta.env.DEV;
+        const workletUrl = isDev
+          ? new URL("./processor.ts", import.meta.url).href
+          : "/assets/processor.js";
+
         await this.audioContext.audioWorklet.addModule(workletUrl);
         this.options.onLog("Worklet loaded successfully");
 

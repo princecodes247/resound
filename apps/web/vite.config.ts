@@ -7,4 +7,19 @@ export default defineConfig({
   resolve: {
     dedupe: ["react", "react-dom"],
   },
+  build: {
+    rollupOptions: {
+      input: {
+        main: "./index.html",
+        processor: "./src/audio/processor.ts",
+      },
+      output: {
+        entryFileNames: (chunkInfo) => {
+          return chunkInfo.name === "processor"
+            ? "assets/[name].js"
+            : "assets/[name]-[hash].js";
+        },
+      },
+    },
+  },
 });

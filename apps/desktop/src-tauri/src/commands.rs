@@ -66,17 +66,15 @@ pub async fn start_host(
     monitor_gain: f32,
     broadcast_gain: f32
 ) -> Result<u16, String> {
-  // Keep session id stable for this app instance.
+  // If already started, stop it first.
+  if STARTED_SESSION_ID.lock().unwrap().is_some() {
+    let _ = stop_host().await;
+  }
+  
+  // Set the fresh session ID.
   {
     let mut guard = STARTED_SESSION_ID.lock().unwrap();
-    if let Some(existing) = guard.as_ref() {
-      if existing != &session_id {
-        return Err(format!("Host already started with different session_id: {existing}"));
-      }
-    }
-    if guard.is_none() {
-      *guard = Some(session_id.clone());
-    }
+    *guard = Some(session_id.clone());
   }
 
   let (wrapped_stream, sample_rate, host_channels) = {

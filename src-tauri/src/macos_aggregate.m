@@ -56,28 +56,51 @@ static AudioObjectID find_device_by_name(NSString* targetName) {
     return found;
 }
 
-static AudioObjectID get_default_output() {
+static AudioObjectID find_builtin_device(BOOL isInput) {
     AudioObjectPropertyAddress addr = {
-        kAudioHardwarePropertyDefaultOutputDevice,
+        kAudioHardwarePropertyDevices,
         kAudioObjectPropertyScopeGlobal,
         kAudioObjectPropertyElementMain
     };
-    AudioObjectID devID = kAudioObjectUnknown;
-    UInt32 size = sizeof(AudioObjectID);
-    AudioObjectGetPropertyData(kAudioObjectSystemObject, &addr, 0, NULL, &size, &devID);
-    return devID;
-}
-
-static AudioObjectID get_default_input() {
-    AudioObjectPropertyAddress addr = {
-        kAudioHardwarePropertyDefaultInputDevice,
-        kAudioObjectPropertyScopeGlobal,
-        kAudioObjectPropertyElementMain
-    };
-    AudioObjectID devID = kAudioObjectUnknown;
-    UInt32 size = sizeof(AudioObjectID);
-    AudioObjectGetPropertyData(kAudioObjectSystemObject, &addr, 0, NULL, &size, &devID);
-    return devID;
+    UInt32 size = 0;
+    if (AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &addr, 0, NULL, &size) != noErr) {
+        return kAudioObjectUnknown;
+    }
+    
+    int count = size / sizeof(AudioObjectID);
+    AudioObjectID* devices = malloc(size);
+    if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &addr, 0, NULL, &size, devices) != noErr) {
+        free(devices);
+        return kAudioObjectUnknown;
+    }
+    
+    AudioObjectID found = kAudioObjectUnknown;
+    for (int i = 0; i < count; i++) {
+        AudioObjectPropertyAddress transportAddr = {
+            kAudioDevicePropertyTransportType,
+            kAudioObjectPropertyScopeGlobal,
+            kAudioObjectPropertyElementMain
+        };
+        UInt32 transportType = 0;
+        UInt32 ttSize = sizeof(UInt32);
+        if (AudioObjectGetPropertyData(devices[i], &transportAddr, 0, NULL, &ttSize, &transportType) == noErr) {
+            if (transportType == 'bltn') {
+                AudioObjectPropertyAddress streamAddr = {
+                    kAudioDevicePropertyStreams,
+                    isInput ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput,
+                    kAudioObjectPropertyElementMain
+                };
+                UInt32 streamSize = 0;
+                AudioObjectGetPropertyDataSize(devices[i], &streamAddr, 0, NULL, &streamSize);
+                if (streamSize > 0) {
+                    found = devices[i];
+                    break;
+                }
+            }
+        }
+    }
+    free(devices);
+    return found;
 }
 
 void create_aggregate_device_c(const char* name) {
@@ -90,8 +113,8 @@ void create_aggregate_device_c(const char* name) {
             return;
         }
         
-        AudioObjectID defaultOutID = get_default_output();
-        AudioObjectID defaultInID = get_default_input();
+        AudioObjectID defaultOutID = find_builtin_device(NO);
+        AudioObjectID defaultInID = find_builtin_device(YES);
 
         NSString* defaultOutUID = get_device_uid(defaultOutID);
         NSString* defaultInUID = get_device_uid(defaultInID);

@@ -140,17 +140,23 @@ pub async fn start_native_audio_capture(
               first_timestamp = timestamp;
           }
 
-          aggregate_buf.extend_from_slice(samples);
+          // aggregate_buf.extend_from_slice(samples);
+let frame_size = 4 * channels as usize;
+
+// Ensure we only append full frames
+let aligned_len = samples.len() - (samples.len() % frame_size);
+aggregate_buf.extend_from_slice(&samples[..aligned_len]);
 
           let frame_size = 4 * channels as usize;
-          if aggregate_buf.len() >= target_samples * frame_size {
-              let mut final_packet = Vec::with_capacity(8 + aggregate_buf.len());
-              final_packet.extend_from_slice(&first_timestamp.to_le_bytes());
-              final_packet.extend_from_slice(&aggregate_buf);
-              
-              broadcast_audio_packet(final_packet).await;
-              aggregate_buf.clear();
-          }
+while aggregate_buf.len() >= target_samples * frame_size {
+    let chunk = aggregate_buf.drain(..target_samples * frame_size).collect::<Vec<_>>();
+
+    let mut final_packet = Vec::with_capacity(8 + chunk.len());
+    final_packet.extend_from_slice(&first_timestamp.to_le_bytes());
+    final_packet.extend_from_slice(&chunk);
+
+    broadcast_audio_packet(final_packet).await;
+}
       }
       log::info!("Audio broadcasting task stopped.");
   });

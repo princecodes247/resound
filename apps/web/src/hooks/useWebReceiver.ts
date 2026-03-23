@@ -1,4 +1,3 @@
-// useWebReceiver.ts
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import type { DiscoveredHost, LogEntry } from "@resound/shared";
 import { WebAudioController } from "../audio/WebAudioController";

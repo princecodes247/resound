@@ -1,5 +1,3 @@
-// WebAudioController.ts
-
 export interface WebAudioControllerOptions {
   onLog: (message: string) => void;
   onStatusChange: (
@@ -30,15 +28,25 @@ export class WebAudioController {
     this.options.onStatusChange("connecting");
 
     try {
+      this.options.onLog(`Initializing AudioContext at ${sampleRate}Hz...`);
       this.audioContext = new (
         window.AudioContext || (window as any).webkitAudioContext
-      )({ sampleRate });
+      )({ sampleRate: 48000 });
+      // )({ sampleRate });
+      this.options.onLog(
+        `AudioContext created. Actual Sample Rate: ${this.audioContext.sampleRate} Hz. State: ${this.audioContext.state}`,
+      );
+
+      if (this.audioContext.state === "suspended") {
+        this.options.onLog("Resuming AudioContext...");
+        await this.audioContext.resume();
+      }
 
       // Load and add the worklet
-      // Use URL constructor with import.meta.url for Vite
       const workletUrl = new URL("./processor.ts", import.meta.url).href;
       await this.audioContext.audioWorklet.addModule(workletUrl);
-
+      this.options.onLog("Worklet loaded successfully");
+      console.log("Worklet loaded successfully");
       this.workletNode = new AudioWorkletNode(
         this.audioContext,
         "resound-processor",
@@ -48,7 +56,9 @@ export class WebAudioController {
       );
       this.workletNode.connect(this.audioContext.destination);
 
-      this.socket = new WebSocket(`ws://${hostIp}:${hostPort}/ws`);
+      const wsUrl = `ws://${hostIp}:${hostPort}/ws`;
+      this.options.onLog(`Connecting to ${wsUrl}...`);
+      this.socket = new WebSocket(wsUrl);
       this.socket.binaryType = "arraybuffer";
 
       this.socket.onopen = () => {
@@ -64,12 +74,32 @@ export class WebAudioController {
         this.options.onStatusChange("receiving");
       };
 
+      let packetCount = 0;
       this.socket.onmessage = (event) => {
         if (event.data instanceof ArrayBuffer) {
-          const pcmData = new Float32Array(event.data.slice(8));
+          packetCount++;
+          const audioBytes = event.data.slice(8);
+
+          // ensure alignment
+          if (audioBytes.byteLength % 4 !== 0) {
+            this.options.onLog("Misaligned audio packet — dropping");
+            return;
+          }
+
+          const view = new DataView(event.data);
+          const timestamp = Number(view.getBigUint64(0, true));
+
+          const pcmData = new Float32Array(audioBytes);
+          if (packetCount % 100 === 0) {
+            this.options.onLog(
+              `Received 100 packets. Last: ${pcmData.length} samples (${channels} ch).`,
+            );
+          }
           this.workletNode?.port.postMessage({
             type: "audio-data",
             payload: pcmData,
+            channels,
+            sampleRate,
           });
         }
       };
@@ -80,11 +110,12 @@ export class WebAudioController {
       };
 
       this.socket.onerror = (err) => {
-        this.options.onLog(`WebSocket error: ${err}`);
+        this.options.onLog(`WebSocket error: ${String(err)}`);
         this.options.onStatusChange("error");
       };
     } catch (e) {
       this.options.onLog(`Failed to start web audio logic: ${String(e)}`);
+      console.log(`Failed to start web audio logic: ${String(e)}`);
       this.options.onStatusChange("error");
       this.isReceiving = false;
     }

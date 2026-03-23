@@ -66,6 +66,18 @@ export default function App() {
         <div className="w-full bg-[#141415]/80 backdrop-blur-xl border border-white/10 rounded-[32px] p-8 shadow-2xl relative">
           <ListenView receiver={receiver} />
         </div>
+
+        {/* Logs */}
+        {receiver.logs.length > 0 && (
+          <div className="w-full mt-6 bg-[#141415]/40 backdrop-blur-md border border-white/5 rounded-2xl p-4 max-h-40 overflow-y-auto font-mono text-[10px] text-zinc-500">
+            {receiver.logs.map((log, i) => (
+              <div key={i} className="mb-1">
+                <span className="mr-2 text-zinc-600">[{log.time}]</span>
+                <span>{log.message}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );

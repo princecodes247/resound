@@ -1,7 +1,7 @@
 import { useEffect, useMemo, memo, useRef } from 'react';
 import { useWebReceiver } from './hooks/useWebReceiver';
 import type { DiscoveredHost } from '@resound/shared';
-import { Radio, Headphones, RefreshCw, ChevronDown, Activity, Wifi, Volume2, Globe } from 'lucide-react';
+import { Radio, Headphones, RefreshCw, ChevronDown, Activity, Wifi, Volume2, Globe, Plug } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -118,10 +118,10 @@ export default function App() {
             </div>
             <div className="p-6 border rounded-3xl bg-white/5 border-white/5">
               <div className="flex items-center justify-center w-10 h-10 mb-4 text-purple-400 rounded-2xl bg-purple-500/10">
-                <Globe size={20} />
+                <Plug size={20} />
               </div>
-              <h3 className="mb-1 text-sm font-bold">Web Native</h3>
-              <p className="text-xs text-zinc-500">No installation required. Works in any modern browser.</p>
+              <h3 className="mb-1 text-sm font-bold">Plug and Play</h3>
+              <p className="text-xs text-zinc-500">No installation required. Just open and start listening.</p>
             </div>
           </div>
 

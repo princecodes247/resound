@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { AudioDevice, LogEntry } from "../types";
+import type { AudioDevice, LogEntry } from "../types";
 
 export const useAudioHost = () => {
   const [devices, setDevices] = useState<AudioDevice[]>([]);

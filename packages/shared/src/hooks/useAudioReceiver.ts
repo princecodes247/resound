@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { DiscoveredHost, LogEntry } from "../types";
+import type { DiscoveredHost, LogEntry } from "../types";
 
 export const useAudioReceiver = () => {
   const [status, setStatus] = useState<

@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useAudioHost } from './hooks/useAudioHost';
-import { useAudioReceiver } from './hooks/useAudioReceiver';
+import { useAudioHost, useAudioReceiver } from '@resound/shared';
 import { Radio, Headphones, RefreshCw, Power, Settings, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';

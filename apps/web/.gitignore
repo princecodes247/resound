@@ -12,10 +12,6 @@ dist
 dist-ssr
 *.local
 
-.cargo
-.npm-cache
-.vite
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

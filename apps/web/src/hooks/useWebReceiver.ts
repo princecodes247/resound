@@ -5,7 +5,7 @@ import { WebAudioController } from "../audio/WebAudioController";
 export const useWebReceiver = () => {
   const [hosts, setHosts] = useState<DiscoveredHost[]>([]);
   const [status, setStatus] = useState<
-    "idle" | "connecting" | "receiving" | "error"
+    "idle" | "discovering" | "connecting" | "receiving" | "error"
   >("idle");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [selectedHost, setSelectedHost] = useState<DiscoveredHost | null>(null);
@@ -29,6 +29,7 @@ export const useWebReceiver = () => {
   const probeHost = useCallback(
     async (ip: string, port: number) => {
       addLog(`Probing ${ip}:${port}...`);
+      setStatus("discovering");
       try {
         const resp = await fetch(`http://${ip}:${port}/info`);
         if (!resp.ok) throw new Error("Host not found or not a Resound host.");
@@ -49,9 +50,11 @@ export const useWebReceiver = () => {
           return [...prev, host];
         });
         addLog(`Found host: ${host.name}`);
+        setStatus("idle");
         return host;
       } catch (e) {
         addLog(`Probe failed: ${String(e)}`);
+        setStatus("error");
         return null;
       }
     },

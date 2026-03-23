@@ -598,8 +598,14 @@ pub async fn start_native_receiver(
 
             // Sliding minimum sync: align to the fastest packet
             let current_offset = current_receiver_sec - host_time_sec;
-            if sync_offset.is_none() || current_offset < sync_offset.unwrap() {
+            if sync_offset.is_none() {
                 sync_offset = Some(current_offset);
+            } else {
+                // slow smoothing (VERY important)
+                let alpha = 0.001; // tiny adjustment
+                sync_offset = Some(
+                    sync_offset.unwrap() * (1.0 - alpha) + current_offset * alpha
+                );
             }
 
             let samples_bytes = &data[8..];
@@ -632,38 +638,54 @@ pub async fn start_native_receiver(
             {
                 let mut buf = playback_buf.lock().unwrap();
                 
-                // Normalization per packet
-                let max = resampled_samples.iter().fold(0.0f32, |a, &b| a.max(b.abs()));
-                if max > 0.02 {
-                    let norm = (1.0 / max).min(2.0); // Safety cap: max 2x boost from normalization
-                    buf.extend(resampled_samples.iter().map(|s| s * norm));
-                } else {
-                    buf.extend(resampled_samples.iter().copied());
-                }
+                // // Normalization per packet
+                // let max = resampled_samples.iter().fold(0.0f32, |a, &b| a.max(b.abs()));
+                // if max > 0.02 {
+                //     let norm = (1.0 / max).min(2.0); // Safety cap: max 2x boost from normalization
+                //     buf.extend(resampled_samples.iter().map(|s| s * norm));
+                // } else {
+                //     buf.extend(resampled_samples.iter().copied());
+                // }
+
+                buf.extend(resampled_samples.iter().copied());
 
                 // Smooth jitter buffer: drain frame-by-frame
                 let delay_samples = (sample_rate as f64 * channels as f64 * TARGET_DELAY_MS as f64 / 1000.0) as usize;
                 let max_buffer = delay_samples + (sample_rate as usize * channels / 10); // +100ms
-                if buf.len() > max_buffer {
-                    let to_remove = buf.len() - delay_samples;
-                    // Align to frame boundaries (multi-channel)
-                    let aligned_remove = (to_remove / channels) * channels;
-                    buf.drain(0..aligned_remove);
+                let target = delay_samples;
+                let tolerance = sample_rate as usize * channels / 50; // ~20ms
+
+                if buf.len() > target + tolerance {
+                    // gently speed up playback
+                    for _ in 0..channels {
+                        buf.pop_front(); // drop 1 frame ONLY
+                    }
+                } else if buf.len() < target - tolerance {
+                    // gently slow down playback
+                    if let Some(last) = buf.front().copied() {
+                        for _ in 0..channels {
+                            buf.push_front(last); // duplicate 1 frame
+                        }
+                    }
                 }
             }
         }
         log::info!("Receiver WebSocket task stopped.");
     });
 
+    let mut started = false;
     let stream = device.build_output_stream(
         &config.into(),
         move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
             let mut buf = playback_buf_clone.lock().unwrap();
             let delay_samples = (sample_rate as f64 * channels as f64 * TARGET_DELAY_MS as f64 / 1000.0) as usize;
 
-            if buf.len() < delay_samples {
-                for x in data.iter_mut() { *x = 0.0; }
-                return;
+            if !started {
+                if buf.len() < delay_samples * 2 {
+                    for x in data.iter_mut() { *x = 0.0; }
+                    return;
+                }
+                started = true;
             }
 
             if host_channels as usize == channels {

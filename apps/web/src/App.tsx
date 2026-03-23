@@ -2,7 +2,7 @@ import { useEffect, useMemo, memo, useRef } from 'react';
 import { useWebReceiver } from './hooks/useWebReceiver';
 import type { DiscoveredHost } from '@resound/shared';
 import { Radio, Headphones, RefreshCw, ChevronDown, Activity, Wifi, Volume2, Globe } from 'lucide-react';
-import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -36,10 +36,6 @@ export default function App() {
   const isListening = receiver.status === 'receiving' || receiver.status === 'connecting';
   const appSectionRef = useRef<HTMLDivElement>(null);
 
-  const { scrollYProgress } = useScroll();
-  const opacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
-  const scale = useTransform(scrollYProgress, [0, 0.2], [1, 0.9]);
-
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const hostParam = params.get('host');
@@ -56,10 +52,6 @@ export default function App() {
       receiver.discoverHosts();
     }
   }, [isListening]);
-
-  const listenGlowClass = receiver.status === 'receiving' && receiver.selectedHost
-    ? getThemeForString(receiver.selectedHost.name).bg
-    : 'bg-accent/20';
 
   const scrollToApp = () => {
     appSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -324,13 +316,6 @@ const ListenView = memo(({ receiver }: ListenViewProps) => {
 });
 
 // Icons
-const OrbitIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
-    <circle cx="12" cy="12" r="3" />
-    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10" strokeDasharray="4 4" />
-  </svg>
-);
-
 const SignalIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
     <path d="M12 20a8 8 0 1 1 0-16 8 8 0 0 1 0 16z" />
@@ -339,87 +324,11 @@ const SignalIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const WaveIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
-    <path d="M2 10c3-3 6 2 9-2s6 5 9 2" />
-    <path d="M2 14c3-3 6 2 9-2s6 5 9 2" opacity="0.5" />
-  </svg>
-);
-
-const DisconnectIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
-    <circle cx="12" cy="12" r="9" />
-    <path d="M15 9l-6 6M9 9l6 6" />
-  </svg>
-);
-
-const ScanIcon = ({ className, animate }: { className?: string; animate?: boolean }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
-    <circle cx="11" cy="11" r="8" />
-    <path d="M21 21l-4.35-4.35" />
-    {animate && (
-      <>
-        <circle cx="11" cy="11" r="10" strokeOpacity="0.3" className="animate-ping" />
-        <circle cx="11" cy="11" r="12" strokeOpacity="0.1" className="animate-ping animation-delay-1000" />
-      </>
-    )}
-  </svg>
-);
-
-const ArrowRightIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
-    <path d="M5 12h14M12 5l7 7-7 7" />
-  </svg>
-);
-
-const ChevronDownIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
-    <path d="M6 9l6 6 6-6" />
-  </svg>
-);
-
 const DownloadIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
   </svg>
 );
-
-const AppleIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
-  </svg>
-);
-
-const WindowsIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M3 12V6.75l6-1.32v6.48L3 12m17-9v8.75l-10 .15V5.21L20 3M3 13l6 .09v6.81l-6-1.15V13m17 .25V22l-10-1.91V13.1l10 .15z" />
-  </svg>
-);
-
-const LinuxIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M12.504 0c-.155 0-.315.008-.48.021-1.907.143-3.847.455-5.288 1.097-1.192.521-2.232 1.33-2.79 2.487-.29.598-.427 1.255-.457 1.916-.04.884.068 1.783.266 2.65.235 1.02.576 2.018.905 3.01.33.993.65 1.975.868 2.975.22 1.01.33 2.04.27 3.07-.03.485-.12.964-.27 1.43-.29.893-.792 1.7-1.43 2.36-.37.383-.795.72-1.26 1.007-.47.28-.978.507-1.51.678-.53.17-1.09.287-1.655.348-.26.03-.52.05-.78.05-.26 0-.52-.02-.78-.05l-.08-.01c.17.33.37.64.6.93.57.7 1.3 1.28 2.12 1.7 1.18.6 2.5.9 3.82.97.66.04 1.32.02 1.97-.06 1.3-.15 2.57-.5 3.76-1.03 1.18-.53 2.27-1.24 3.24-2.1.96-.86 1.8-1.88 2.47-3.02.67-1.13 1.15-2.39 1.42-3.71.13-.66.2-1.33.2-2 0-.67-.07-1.34-.2-2-.27-1.32-.75-2.58-1.42-3.71-.67-1.14-1.51-2.16-2.47-3.02-.97-.86-2.06-1.57-3.24-2.1-1.19-.53-2.46-.88-3.76-1.03-.32-.04-.64-.06-.97-.06z" />
-  </svg>
-);
-
-// Theme colors
-const HOST_THEMES = [
-  { accent: '#06b6d4', glow: 'rgba(6, 182, 212, 0.5)' },
-  { accent: '#8b5cf6', glow: 'rgba(139, 92, 246, 0.5)' },
-  { accent: '#ec4899', glow: 'rgba(236, 72, 153, 0.5)' },
-  { accent: '#3b82f6', glow: 'rgba(59, 130, 246, 0.5)' },
-  { accent: '#14b8a6', glow: 'rgba(20, 184, 166, 0.5)' },
-  { accent: '#6366f1', glow: 'rgba(99, 102, 241, 0.5)' },
-] as const;
-
-function getHostTheme(seed: string) {
-  if (!seed) return HOST_THEMES[0];
-  let hash = 5381;
-  for (let i = 0; i < seed.length; i++) {
-    hash = ((hash << 5) + hash) + seed.charCodeAt(i);
-  }
-  return HOST_THEMES[Math.abs(hash) % HOST_THEMES.length];
-}
 
 // Animated Background
 const CosmicBackground = memo(() => (
@@ -433,29 +342,6 @@ const CosmicBackground = memo(() => (
     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-white/[0.03] rounded-full animate-spin-slow animation-delay-2000" style={{ animationDirection: 'reverse' }} />
   </div>
 ));
-
-// Status Badge
-const StatusBadge = ({ status }: { status: string }) => {
-  const config = useMemo(() => {
-    switch (status) {
-      case 'receiving':
-        return { icon: <span className="w-2 h-2 rounded-full bg-aurora-cyan animate-pulse" />, text: 'LIVE', className: 'text-aurora-cyan border-aurora-cyan/30 bg-aurora-cyan/10' };
-      case 'connecting':
-        return { icon: <ScanIcon className="w-3 h-3 animate-spin" />, text: 'CONNECTING', className: 'text-amber-400 border-amber-400/30 bg-amber-400/10' };
-      case 'discovering':
-        return { icon: <ScanIcon className="w-3 h-3" animate />, text: 'SCANNING', className: 'text-aurora-purple border-aurora-purple/30 bg-aurora-purple/10' };
-      default:
-        return { icon: <span className="w-2 h-2 rounded-full bg-stellar-dim" />, text: 'STANDBY', className: 'text-stellar-dim border-white/10 bg-white/5' };
-    }
-  }, [status]);
-
-  return (
-    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[10px] font-semibold tracking-widest ${config.className}`}>
-      {config.icon}
-      {config.text}
-    </div>
-  );
-};
 
 const HeroSection = ({ onScrollToApp }: { onScrollToApp: () => void }) => {
   return (

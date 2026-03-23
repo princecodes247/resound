@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { AudioDevice, LogEntry } from "../types";
+import type { AudioDevice, LogEntry } from "@resound/shared";
 
 // Detect if running in Tauri
 const isTauri = !!(window as any).__TAURI_INTERNALS__;

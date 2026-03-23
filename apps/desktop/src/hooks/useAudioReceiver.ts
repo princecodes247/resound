@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { DiscoveredHost, LogEntry } from "../types";
+import type { DiscoveredHost, LogEntry } from "@resound/shared";
 
 // Detect if running in Tauri
 const isTauri = !!(window as any).__TAURI_INTERNALS__;

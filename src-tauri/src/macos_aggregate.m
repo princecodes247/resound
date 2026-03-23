@@ -68,6 +68,18 @@ static AudioObjectID get_default_output() {
     return devID;
 }
 
+static AudioObjectID get_default_input() {
+    AudioObjectPropertyAddress addr = {
+        kAudioHardwarePropertyDefaultInputDevice,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    AudioObjectID devID = kAudioObjectUnknown;
+    UInt32 size = sizeof(AudioObjectID);
+    AudioObjectGetPropertyData(kAudioObjectSystemObject, &addr, 0, NULL, &size, &devID);
+    return devID;
+}
+
 void create_aggregate_device_c(const char* name) {
     if (!name) return;
     
@@ -78,28 +90,22 @@ void create_aggregate_device_c(const char* name) {
             return;
         }
         
-        AudioObjectID blackholeID = find_device_by_name(@"BlackHole 2ch");
-        if (blackholeID == kAudioObjectUnknown) {
-             blackholeID = find_device_by_name(@"BlackHole 16ch");
-        }
-        
         AudioObjectID defaultOutID = get_default_output();
-        
-        if (blackholeID == kAudioObjectUnknown) {
-             NSLog(@"BlackHole not found! Cannot create aggregate device.");
-             return;
-        }
+        AudioObjectID defaultInID = get_default_input();
 
-        NSString* bhUID = get_device_uid(blackholeID);
         NSString* defaultOutUID = get_device_uid(defaultOutID);
+        NSString* defaultInUID = get_device_uid(defaultInID);
         
         NSMutableArray *subDevices = [NSMutableArray array];
-        // subdevices must be an array of NSString UIDs, not dictionaries!
-        if (defaultOutUID) {
-            [subDevices addObject:defaultOutUID];
+        NSMutableSet *addedUIDs = [NSMutableSet set];
+        
+        if (defaultInUID && ![addedUIDs containsObject:defaultInUID]) {
+            [subDevices addObject:@{ @"uid": defaultInUID }];
+            [addedUIDs addObject:defaultInUID];
         }
-        if (bhUID) {
-            [subDevices addObject:bhUID];
+        if (defaultOutUID && ![addedUIDs containsObject:defaultOutUID]) {
+            [subDevices addObject:@{ @"uid": defaultOutUID }];
+            [addedUIDs addObject:defaultOutUID];
         }
         
         AudioObjectID pluginID = kAudioObjectUnknown;
@@ -121,11 +127,12 @@ void create_aggregate_device_c(const char* name) {
             return;
         }
         
+        NSString *masterUID = defaultOutUID ? defaultOutUID : (defaultInUID ? defaultInUID : @"");
         NSDictionary *dict = @{
             @"name": nsName,
             @"uid": [NSString stringWithFormat:@"%@_UID_%d", nsName, (int)[[NSDate date] timeIntervalSince1970]],
             @"subdevices": subDevices,
-            @"master": (defaultOutUID ? defaultOutUID : bhUID)
+            @"master": masterUID
         };
         
         AudioObjectPropertyAddress createAddr = {

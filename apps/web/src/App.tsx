@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import { useAudioReceiver } from '@resound/shared';
+import { useEffect, useMemo, memo } from 'react';
+import { useWebReceiver } from './hooks/useWebReceiver';
 import type { DiscoveredHost } from '@resound/shared';
 import { Radio, Headphones, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -32,7 +32,7 @@ function getThemeForString(seed: string) {
 }
 
 export default function App() {
-  const receiver = useAudioReceiver();
+  const receiver = useWebReceiver();
   const isListening = receiver.status === 'receiving' || receiver.status === 'connecting';
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export default function App() {
   );
 }
 
-function ListenView({ receiver }: { receiver: any }) {
+const ListenView = memo(({ receiver }: { receiver: any }) => {
   const isReceiving = receiver.status === 'receiving';
   const isDiscovering = receiver.status === 'discovering';
 
@@ -230,4 +230,4 @@ function ListenView({ receiver }: { receiver: any }) {
       )}
     </motion.div>
   );
-}
+});

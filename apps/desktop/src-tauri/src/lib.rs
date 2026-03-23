@@ -73,6 +73,8 @@ pub(crate) struct RoutingState {
   pub(crate) audio_stream: Option<AudioStream>,
   pub(crate) receiver_stream: Option<AudioStream>,
   pub(crate) broadcast_tx: Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>,
+  pub(crate) sample_rate: u32,
+  pub(crate) channels: u16,
 }
 
 fn receiver_key(session_id: &str, receiver_id: &str) -> String {
@@ -154,7 +156,10 @@ pub async fn start_native_audio_capture(
   });
 
   {
-      SIGNALING_STATE.write().await.broadcast_tx = Some(tx_broadcast.clone());
+      let mut state = SIGNALING_STATE.write().await;
+      state.broadcast_tx = Some(tx_broadcast.clone());
+      state.sample_rate = sample_rate;
+      state.channels = channels;
   }
 
   
@@ -316,11 +321,16 @@ async fn info_handler() -> impl axum::response::IntoResponse {
     // Let's just return what we have or add them to RoutingState.
     // For now, let's return a simple JSON.
     
+    let (sr, ch) = {
+        let state = SIGNALING_STATE.read().await;
+        (state.sample_rate, state.channels)
+    };
+    
     axum::Json(serde_json::json!({
         "session_id": sid,
-        "name": "Resound Broadcast", // Static fallback or extract from somewhere
-        "sample_rate": 44100,
-        "channels": 2
+        "name": "Resound Broadcast", 
+        "sample_rate": sr,
+        "channels": ch
     }))
 }
 

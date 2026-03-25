@@ -47,7 +47,7 @@ export function DriverSetupFlow({ onClose, onComplete }: DriverSetupFlowProps) {
     };
 
     return (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#0A0A0B]/95 backdrop-blur-xl rounded-[32px] p-8 text-center overflow-hidden">
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#0A0A0B]/95 backdrop-blur-xl h-full rounded-[32px] p-8 text-center overflow-hidden">
             <button
                 onClick={onClose}
                 className="absolute p-2 transition-colors rounded-full top-6 right-6 text-zinc-500 hover:text-white bg-white/5"
@@ -64,17 +64,14 @@ export function DriverSetupFlow({ onClose, onComplete }: DriverSetupFlowProps) {
                         exit={{ opacity: 0, y: -20 }}
                         className="flex flex-col items-center max-w-sm"
                     >
-                        <div className="relative flex items-center justify-center w-20 h-20 mb-8 border rounded-3xl bg-white/5 border-white/10 group">
-                            <div className="absolute inset-0 transition-opacity rounded-full opacity-0 bg-white/10 blur-2xl group-hover:opacity-100" />
-                            <Headphones className="relative z-10 text-white" size={40} />
-                        </div>
 
-                        <h2 className="mb-3 text-2xl font-semibold text-white">Enable Perfect Sync</h2>
-                        <p className="mb-8 leading-relaxed text-zinc-400">
+
+                        <h2 className="mt-4 mb-3 text-2xl font-semibold text-white">Enable Perfect Sync</h2>
+                        {/* <p className="mb-8 leading-relaxed text-zinc-400">
                             Get zero-lag audio across all devices. No echo, perfectly in sync, works with any app (Spotify, YouTube, etc).
-                        </p>
+                        </p> */}
 
-                        <div className="grid w-full grid-cols-1 gap-3 mb-10">
+                        <div className="grid w-full grid-cols-1 gap-1 mb-8">
                             {[
                                 "No echo or delay",
                                 "Perfectly sample-aligned sync",

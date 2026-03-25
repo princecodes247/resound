@@ -39,7 +39,7 @@ use futures_util::stream::StreamExt;
 
 pub(crate) const SERVICE_TYPE: &str = "_resound-audio._tcp.local.";
 pub(crate) const WS_PATH: &str = "/ws";
-pub(crate) const TARGET_DELAY_MS: u32 = 35;
+pub(crate) const TARGET_DELAY_MS: u32 = 50;
 
 mod commands;
 mod macos_audio;
@@ -282,6 +282,17 @@ pub async fn start_native_audio_capture(
 
           if aggregate_buf.is_empty() {
               first_timestamp = timestamp;
+          } else {
+              // Jump detection: if the incoming timestamp is far from where we expected,
+              // it means there was a gap or jitter. We should reset to avoid cumulative drift.
+              let buffer_duration_ms = (aggregate_buf.len() / frame_size) as u64 * 1000 / sample_rate as u64;
+              let expected_timestamp = first_timestamp + buffer_duration_ms;
+              
+              if timestamp > expected_timestamp + 100 || timestamp < expected_timestamp.saturating_sub(100) {
+                  log::warn!("Audio jump detected ({}ms), resetting aggregation buffer.", timestamp as i64 - expected_timestamp as i64);
+                  aggregate_buf.clear();
+                  first_timestamp = timestamp;
+              }
           }
 
           aggregate_buf.extend_from_slice(samples);

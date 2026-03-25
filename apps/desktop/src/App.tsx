@@ -333,8 +333,10 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
 
     const handleAutoSwitch = async () => {
         try {
-            await invoke('set_system_volume', { volume: 100 }).catch(e => console.error("Volume failed", e));
-            await invoke('set_default_audio_device', { isInput: false, name: 'blackhole' });
+            if (selectedDevice?.toLowerCase().includes('driverless')) {
+                await invoke('set_system_volume', { volume: 100 }).catch(e => console.error("Volume failed", e));
+                await invoke('set_default_audio_device', { isInput: false, name: selectedDevice });
+            }
             // await invoke('set_default_audio_device', { isInput: false, name: 'resound audio' });
         } catch (e) {
             console.error('Failed to auto switch', e);

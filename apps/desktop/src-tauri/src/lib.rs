@@ -43,6 +43,7 @@ pub(crate) const TARGET_DELAY_MS: u32 = 50;
 pub(crate) const PLAYOUT_DELAY_MS: u64 = 150;
 
 mod commands;
+#[cfg(target_os = "macos")]
 mod macos_audio;
 
 #[derive(Debug, Clone, Serialize)]
@@ -676,6 +677,7 @@ pub fn run() {
       #[cfg(target_os = "macos")]
       crate::setup_default_device_listener();
 
+      #[cfg(target_os = "macos")]
       crate::macos_audio::create_aggregate_device("Resound Audio");
 
       let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;

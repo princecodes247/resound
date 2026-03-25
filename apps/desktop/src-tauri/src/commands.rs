@@ -65,6 +65,7 @@ pub fn list_output_devices() -> Result<Vec<AudioDevice>, String> {
   Ok(list)
 }
 
+#[cfg(target_os = "macos")]
 #[tauri::command]
 pub async fn install_driver(app: tauri::AppHandle) -> Result<(), String> {
   // 1. Try standard base resource (may be flattened)
@@ -110,6 +111,13 @@ pub async fn install_driver(app: tauri::AppHandle) -> Result<(), String> {
   Err("Installer not found. Please ensure 'apps/desktop/src-tauri/resources/blackhole.pkg' exists.".to_string())
 }
 
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub async fn install_driver(_app: tauri::AppHandle) -> Result<(), String> {
+    Err("Driver installation is only supported on macOS.".to_string())
+}
+
+#[cfg(target_os = "macos")]
 async fn launch_pkg(path: std::path::PathBuf) -> Result<(), String> {
     log::info!("Launching driver installer: {:?}", path);
     std::process::Command::new("open")
@@ -121,15 +129,18 @@ async fn launch_pkg(path: std::path::PathBuf) -> Result<(), String> {
 
 #[tauri::command]
 pub fn check_driver_installed() -> bool {
-  let host = cpal::default_host();
-  if let Ok(devices) = host.input_devices() {
-    for device in devices {
-      if let Ok(name) = device.name() {
-        if name.to_lowercase().contains("blackhole 2ch") {
-          return true;
+  #[cfg(target_os = "macos")]
+  {
+      let host = cpal::default_host();
+      if let Ok(devices) = host.input_devices() {
+        for device in devices {
+          if let Ok(name) = device.name() {
+            if name.to_lowercase().contains("blackhole 2ch") {
+              return true;
+            }
+          }
         }
       }
-    }
   }
   false
 }
@@ -437,37 +448,75 @@ pub fn get_device_id() -> String {
 
 #[tauri::command]
 pub fn get_default_audio_device(is_input: bool) -> Result<String, String> {
-    crate::macos_audio::get_default_device(is_input)
+    #[cfg(target_os = "macos")]
+    {
+        crate::macos_audio::get_default_device(is_input)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let host = cpal::default_host();
+        let device = if is_input {
+            host.default_input_device()
+        } else {
+            host.default_output_device()
+        };
+        device.and_then(|d| d.name().ok())
+            .ok_or_else(|| "No default device found".to_string())
+    }
 }
 
 #[tauri::command]
 pub fn set_default_audio_device(is_input: bool, name: String) -> Result<(), String> {
-    crate::macos_audio::set_default_device(is_input, &name)
+    #[cfg(target_os = "macos")]
+    {
+        crate::macos_audio::set_default_device(is_input, &name)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = is_input;
+        let _ = name;
+        Err("Global default device switching is only supported on macOS.".to_string())
+    }
 }
 
 #[tauri::command]
 pub fn get_system_volume() -> Result<u32, String> {
-    let output = std::process::Command::new("osascript")
-        .args(&["-e", "output volume of (get volume settings)"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    stdout.parse::<u32>().map_err(|e| e.to_string())
+    #[cfg(target_os = "macos")]
+    {
+        let output = std::process::Command::new("osascript")
+            .args(&["-e", "output volume of (get volume settings)"])
+            .output()
+            .map_err(|e| e.to_string())?;
+        
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        stdout.parse::<u32>().map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(100) // Default to 100 on other platforms for now
+    }
 }
 
 #[tauri::command]
 pub fn set_system_volume(volume: u32) -> Result<(), String> {
-    let script = format!("set volume output volume {}", volume);
-    let status = std::process::Command::new("osascript")
-        .args(&["-e", &script])
-        .status()
-        .map_err(|e| e.to_string())?;
-    
-    if status.success() {
-        Ok(())
-    } else {
-        Err("Failed to set volume".to_string())
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!("set volume output volume {}", volume);
+        let status = std::process::Command::new("osascript")
+            .args(&["-e", &script])
+            .status()
+            .map_err(|e| e.to_string())?;
+        
+        if status.success() {
+            Ok(())
+        } else {
+            Err("Failed to set volume".to_string())
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = volume;
+        Ok(()) // No-op for now
     }
 }
 #[tauri::command]

@@ -418,7 +418,7 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
                     <div className="flex flex-col items-center w-full max-w-sm gap-4 p-6 text-center border bg-white/5 border-white/10 rounded-3xl">
                         <div className="p-3 bg-white shadow-xl rounded-2xl">
                             <QRCodeCanvas
-                                value={`${(import.meta as any).env.VITE_WEB_URL ?? `http://${localIp}:5174`}/?host=${localIp}:${host.signalingPort}&sid=${host.sessionId}`}
+                                value={`http://${localIp}:${host.signalingPort}/?host=${localIp}:${host.signalingPort}&sid=${host.sessionId}`}
                                 size={140}
                                 level="M"
                             />

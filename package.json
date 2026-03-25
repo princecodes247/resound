@@ -4,5 +4,13 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ]
+  ],
+  "scripts": {
+    "dev": "cd apps/desktop && cargo tauri dev",
+    "sync-web": "npm run build -w web && mkdir -p apps/desktop/src-tauri/web_dist && rm -rf apps/desktop/src-tauri/web_dist/* && cp -rv apps/web/dist/* apps/desktop/src-tauri/web_dist/",
+    "build": "npm run sync-web && npm run build -w @resound/desktop && cd apps/desktop && npm run tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.10.1"
+  }
 }

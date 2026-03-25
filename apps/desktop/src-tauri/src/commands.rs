@@ -11,6 +11,7 @@ use tokio::net::TcpListener;
 use serde::Serialize;
 use cpal::traits::{DeviceTrait, HostTrait};
 use super::{AudioStream, DiscoveredHost, MDNS_DAEMON, SERVICE_TYPE, SIGNALING_STATE, STARTED_SESSION_ID, SERVER_SHUTDOWN, WS_PATH, websocket_handler, info_handler};
+use tauri::Manager;
 use tower_http::cors::CorsLayer;
 use axum::http::Method;
 
@@ -57,6 +58,7 @@ pub fn list_output_devices() -> Result<Vec<AudioDevice>, String> {
 
 #[tauri::command]
 pub async fn start_host(
+    app: tauri::AppHandle,
     session_id: String, 
     device_name: Option<String>,
     name: Option<String>,
@@ -101,9 +103,35 @@ pub async fn start_host(
   *SERVER_SHUTDOWN.lock().unwrap() = Some(tx);
 
   tokio::spawn(async move {
+    // In Tauri v2, we should use the path resolver. 
+    // For development, we might need to look in src-tauri/web_dist if launched from apps/desktop
+    let mut web_dir = app.path().resource_dir().unwrap_or_default().join("web_dist");
+    
+    if !web_dir.exists() {
+        // Fallback for development: check current_dir/src-tauri/web_dist
+        if let Ok(cwd) = std::env::current_dir() {
+            let dev_path = cwd.join("src-tauri").join("web_dist");
+            if dev_path.exists() {
+                web_dir = dev_path;
+            } else {
+                // Try direct web_dist in case it's there
+                let direct_path = cwd.join("web_dist");
+                if direct_path.exists() {
+                    web_dir = direct_path;
+                }
+            }
+        }
+    }
+
+    log::info!("Serving web_dist from: {:?}", web_dir);
+
     let app = Router::new()
         .route(WS_PATH, get(websocket_handler))
         .route("/info", get(info_handler))
+        .fallback_service(
+            tower_http::services::ServeDir::new(&web_dir)
+                .not_found_service(tower_http::services::ServeFile::new(web_dir.join("index.html")))
+        )
         .layer(CorsLayer::new()
             .allow_origin(tower_http::cors::Any)
             .allow_methods([Method::GET, Method::POST, Method::OPTIONS])

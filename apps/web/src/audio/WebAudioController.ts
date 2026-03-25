@@ -9,6 +9,11 @@ export class WebAudioController {
   private socket: WebSocket | null = null;
   private audioContext: AudioContext | null = null;
   private workletNode: AudioWorkletNode | null = null;
+  private eqChain: {
+    lowShelf: BiquadFilterNode;
+    peaking: BiquadFilterNode;
+    highShelf: BiquadFilterNode;
+  } | null = null;
   private options: WebAudioControllerOptions;
   private isReceiving = false;
   private nextStartTime = 0;
@@ -67,7 +72,13 @@ export class WebAudioController {
             outputChannelCount: [channels],
           },
         );
-        this.workletNode.connect(this.audioContext.destination);
+
+        // Enhance audio with EQ
+        const eq = this.createEQChain(this.audioContext);
+        this.workletNode.connect(eq.lowShelf);
+        eq.highShelf.connect(this.audioContext.destination);
+        this.eqChain = eq;
+
         this.useWorklet = true;
       } else {
         this.options.onLog(
@@ -184,7 +195,12 @@ export class WebAudioController {
 
     const source = this.audioContext.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.audioContext.destination);
+
+    if (this.eqChain) {
+      source.connect(this.eqChain.lowShelf);
+    } else {
+      source.connect(this.audioContext.destination);
+    }
 
     // Schedule slightly in the future to avoid gaps
     const now = this.audioContext.currentTime;
@@ -212,6 +228,13 @@ export class WebAudioController {
       this.socket = null;
     }
 
+    if (this.eqChain) {
+      this.eqChain.lowShelf.disconnect();
+      this.eqChain.peaking.disconnect();
+      this.eqChain.highShelf.disconnect();
+      this.eqChain = null;
+    }
+
     this.workletNode?.disconnect();
     this.workletNode = null;
     this.audioContext?.close();
@@ -220,5 +243,32 @@ export class WebAudioController {
     if (wasReceiving || finalStatus !== "idle") {
       this.options.onStatusChange(finalStatus);
     }
+  }
+
+  private createEQChain(ctx: AudioContext) {
+    // Low Shelf: Boost bass
+    const lowShelf = ctx.createBiquadFilter();
+    lowShelf.type = "lowshelf";
+    lowShelf.frequency.value = 180;
+    lowShelf.gain.value = 7.0; // Significant bass boost
+
+    // Peaking: Add warmth and punch
+    const peaking = ctx.createBiquadFilter();
+    peaking.type = "peaking";
+    peaking.frequency.value = 400;
+    peaking.Q.value = 0.7;
+    peaking.gain.value = 2.0;
+
+    // High Shelf: Smooth out the "dry" highs
+    const highShelf = ctx.createBiquadFilter();
+    highShelf.type = "highshelf";
+    highShelf.frequency.value = 8000;
+    highShelf.gain.value = -3.0; // Gentle roll-off
+
+    // Connect them
+    lowShelf.connect(peaking);
+    peaking.connect(highShelf);
+
+    return { lowShelf, peaking, highShelf };
   }
 }

@@ -299,33 +299,20 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
     const isBroadcasting = host.status === 'broadcasting';
     const [showDriverSetup, setShowDriverSetup] = useState(false);
     const [originalDevices, setOriginalDevices] = useState<{ input: string, output: string, volume: number | null } | null>(null);
+    const [syncMode, setSyncMode] = useState<'perfect' | 'lightweight'>(selectedDevice?.includes('Driverless') ? 'lightweight' : 'perfect');
 
-    const handleStart = async () => {
-        try {
-            const installed = await invoke<boolean>('check_driver_installed');
-            if (!installed) {
-                setShowDriverSetup(true);
-                return;
+    const handleSyncModeChange = (mode: 'perfect' | 'lightweight') => {
+        setSyncMode(mode);
+        if (mode === 'lightweight') {
+            setSelectedDevice('System Audio (Driverless)');
+        } else {
+            const blackhole = host.devices.find((d: any) => d.name.toLowerCase().includes('blackhole'));
+            if (blackhole) {
+                setSelectedDevice(blackhole.name);
+            } else {
+                setSelectedDevice(null);
             }
-
-            const currentInput = await invoke<string>('get_default_audio_device', { isInput: true });
-            const currentOutput = await invoke<string>('get_default_audio_device', { isInput: false });
-
-            const isBlackHole = currentInput.toLowerCase().includes('blackhole');
-
-            if (!isBlackHole) {
-                const currentVolume = await invoke<number>('get_system_volume').catch(() => null);
-                setOriginalDevices({ input: currentInput, output: currentOutput, volume: currentVolume });
-
-                // Auto-configure for perfect sync
-                await handleAutoSwitch(currentOutput);
-                return;
-            }
-        } catch (e) {
-            console.error('Failed to get audio devices', e);
         }
-
-        startActualHost();
     };
 
     const startActualHost = () => {
@@ -342,26 +329,43 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
 
     const handleAutoSwitch = async (previousOutput?: string) => {
         try {
-            // 1. Set system output to BlackHole
             await invoke('set_default_audio_device', { isInput: false, name: 'BlackHole 2ch' });
-
-            // 2. Set Resound monitor to the previous output (built-in speakers usually)
             if (previousOutput) {
                 setMonitorDevice(previousOutput);
             }
-
-            // 3. Set Resound input to BlackHole
             setSelectedDevice('BlackHole 2ch');
-
-            // 4. Set volume to max for clean loopback
             await invoke('set_system_volume', { volume: 100 }).catch(e => console.error("Volume failed", e));
-
-            // Small delay to let OS catch up
             setTimeout(() => startActualHost(), 500);
         } catch (e) {
             console.error('Failed to auto switch', e);
             startActualHost();
         }
+    };
+
+    const handleStart = async () => {
+        if (syncMode === 'perfect') {
+            try {
+                const installed = await invoke<boolean>('check_driver_installed');
+                if (!installed) {
+                    setShowDriverSetup(true);
+                    return;
+                }
+
+                const currentInput = await invoke<string>('get_default_audio_device', { isInput: true });
+                const currentOutput = await invoke<string>('get_default_audio_device', { isInput: false });
+                const isBlackHole = currentInput.toLowerCase().includes('blackhole');
+
+                if (!isBlackHole) {
+                    const currentVolume = await invoke<number>('get_system_volume').catch(() => null);
+                    setOriginalDevices({ input: currentInput, output: currentOutput, volume: currentVolume });
+                    await handleAutoSwitch(currentOutput);
+                    return;
+                }
+            } catch (e) {
+                console.error('Failed to get audio devices', e);
+            }
+        }
+        startActualHost();
     };
 
     const handleDriverSetupComplete = async () => {
@@ -410,29 +414,42 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
             </div>
 
             {!isBroadcasting ? (
-                <div className="flex flex-col items-center w-full space-y-6">
+                <div className="flex flex-col items-center w-full space-y-8">
                     <div className="w-full">
-                        <label className="block px-2 mb-3 text-xs font-semibold tracking-wider uppercase text-zinc-500">Input Source</label>
-                        <div className="relative">
-                            <select
-                                value={selectedDevice ?? ''}
-                                onChange={(e) => setSelectedDevice(e.target.value)}
-                                className="w-full px-5 py-4 text-sm text-white transition-colors border appearance-none cursor-pointer bg-zinc-900/50 border-white/10 rounded-2xl focus:outline-none focus:border-white/30"
+                        <div className="relative flex p-1 mb-2 border bg-zinc-900/50 rounded-2xl border-white/5 backdrop-blur-md">
+                            <div
+                                className="absolute bg-white/10 rounded-xl h-[calc(100%-8px)] top-[4px] transition-all duration-300 ease-out shadow-sm border border-white/5"
+                                style={{
+                                    width: 'calc(50% - 4px)',
+                                    left: syncMode === 'perfect' ? '4px' : 'calc(50%)',
+                                }}
+                            />
+                            <button
+                                onClick={() => handleSyncModeChange('perfect')}
+                                className={cn(
+                                    "flex-1 py-3 text-sm font-medium rounded-xl relative z-10 transition-colors duration-200 flex flex-col items-center justify-center gap-0.5 focus:outline-none",
+                                    syncMode === 'perfect' ? "text-white" : "text-zinc-500 hover:text-zinc-300"
+                                )}
                             >
-                                <option value="">System Default</option>
-                                {host.devices.map((d: any) => (
-                                    <option key={d.name} value={d.name}>{d.is_loopback ? `[System] ${d.name}` : d.name}</option>
-                                ))}
-                            </select>
-                            <div className="absolute -translate-y-1/2 pointer-events-none right-5 top-1/2 text-zinc-500">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
-                            </div>
+                                <span className="text-sm">Perfect Sync</span>
+                                <span className="text-[9px] uppercase tracking-widest opacity-60 font-bold">Recommended</span>
+                            </button>
+                            <button
+                                onClick={() => handleSyncModeChange('lightweight')}
+                                className={cn(
+                                    "flex-1 py-3 text-sm font-medium rounded-xl relative z-10 transition-colors duration-200 flex flex-col items-center justify-center gap-0.5 focus:outline-none",
+                                    syncMode === 'lightweight' ? "text-white" : "text-zinc-500 hover:text-zinc-300"
+                                )}
+                            >
+                                <span className="text-sm">Lightweight Sync</span>
+                                <span className="text-[9px] uppercase tracking-widest opacity-60 font-bold">No-Driver</span>
+                            </button>
                         </div>
-                        {host.devices.some((d: any) => d.is_loopback) === false && (
-                            <p className="text-[11px] text-zinc-500 mt-2 px-2 text-center">
-                                Need to cast system audio? Install <a href="https://existential.audio/blackhole/" target="_blank" className="underline text-zinc-300">BlackHole</a>.
-                            </p>
-                        )}
+                        <p className="text-[10px] text-zinc-500 px-2 text-center">
+                            {syncMode === 'perfect'
+                                ? "Lossless, sample-aligned audio loopback (requires driver)."
+                                : "Zero-configuration capture using system screen recording."}
+                        </p>
                     </div>
 
                     <button
@@ -447,7 +464,7 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
                             onClick={handleStop}
                             className="text-xs text-zinc-500 hover:text-white transition-colors flex items-center gap-1.5 px-4 py-2 bg-white/5 rounded-full"
                         >
-                            <span>↩️</span> Disable Perfect Sync
+                            Disable {syncMode === 'perfect' ? 'Perfect' : 'Lightweight'} Sync
                         </button>
                     )}
                 </div>
@@ -494,7 +511,6 @@ function ListenView({ receiver, outputGain }: any) {
     const isReceiving = receiver.status === 'receiving';
     const isDiscovering = receiver.status === 'discovering';
 
-    // Memoize active host info
     const activeHostName = useMemo(() => {
         if (!receiver.selectedHost) return 'Broadcaster';
         return receiver.selectedHost.name;

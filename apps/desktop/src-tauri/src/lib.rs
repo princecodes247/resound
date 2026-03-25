@@ -39,7 +39,7 @@ use futures_util::stream::StreamExt;
 
 pub(crate) const SERVICE_TYPE: &str = "_resound-audio._tcp.local.";
 pub(crate) const WS_PATH: &str = "/ws";
-pub(crate) const TARGET_DELAY_MS: u32 = 50;
+pub(crate) const TARGET_DELAY_MS: u32 = 35;
 
 mod commands;
 mod macos_audio;
@@ -130,7 +130,10 @@ pub async fn broadcast_audio_packet(packet: Vec<u8>) {
 }
 
 #[cfg(target_os = "macos")]
-struct SCKOutput;
+struct SCKOutput {
+    sample_rate: u32,
+    channels: u16,
+}
 
 #[cfg(target_os = "macos")]
 impl SCStreamOutputTrait for SCKOutput {
@@ -162,11 +165,17 @@ impl SCStreamOutputTrait for SCKOutput {
                     }
                 }
                 
+                let num_samples_per_chan = all_data.len() / (4 * self.channels as usize);
+                let duration_ms = (num_samples_per_chan as u64 * 1000) / self.sample_rate as u64;
+                
+                let host_time_ms = if let Ok(start_guard) = HOST_START_TIME.try_lock() {
+                    let elapsed = start_guard.as_ref().map(|s| s.elapsed().as_millis() as u64).unwrap_or(0);
+                    elapsed.saturating_sub(duration_ms)
+                } else {
+                    0
+                };
+                
                 let mut packet = Vec::with_capacity(all_data.len() + 8);
-                let host_time_ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as u64;
                 packet.extend_from_slice(&host_time_ms.to_le_bytes());
                 packet.extend_from_slice(&all_data);
                 
@@ -293,6 +302,8 @@ pub async fn start_native_audio_capture(
       log::info!("Audio broadcasting task stopped.");
   });
 
+  *HOST_START_TIME.lock().unwrap() = Some(std::time::Instant::now());
+
   if is_driverless {
     #[cfg(target_os = "macos")]
     {
@@ -312,7 +323,7 @@ pub async fn start_native_audio_capture(
       
       let mut stream = SCStream::new(&filter, &sck_config);
       
-      stream.add_output_handler(SCKOutput, SCStreamOutputType::Audio);
+      stream.add_output_handler(SCKOutput { sample_rate, channels }, SCStreamOutputType::Audio);
       stream.start_capture().map_err(|e| format!("Failed to start SCK stream: {e}"))?;
       
       return Ok((AudioStream::SCK(stream), sample_rate, channels));
@@ -323,8 +334,6 @@ pub async fn start_native_audio_capture(
 
   let device = device.unwrap();
   let config = config.unwrap();
-
-  *HOST_START_TIME.lock().unwrap() = Some(std::time::Instant::now());
 
   // For local monitoring
   let monitor_buffer = if monitor {
@@ -807,10 +816,17 @@ pub async fn start_native_receiver(
                 let target = delay_samples;
                 let tolerance = sample_rate as usize * channels / 50; // ~20ms
 
-                if buf.len() > target + tolerance {
-                    // gently speed up playback
-                    for _ in 0..channels {
-                        buf.pop_front(); // drop 1 frame ONLY
+                if buf.len() > target + (sample_rate as usize * channels / 4) {
+                    // Harsh lag (>250ms), drain instantly to target
+                    let to_remove = buf.len() - target;
+                    buf.drain(0..to_remove);
+                    log::warn!("Aggressively drained {} samples to reduce lag", to_remove);
+                } else if buf.len() > target + tolerance {
+                    // Proportional catch-up: drop more frames if lag is higher
+                    let extra_samples = buf.len() - target;
+                    let to_drop_frames = (extra_samples / (sample_rate as usize * channels / 100)).max(1);
+                    for _ in 0..to_drop_frames * channels {
+                        buf.pop_front();
                     }
                 } else if buf.len() < target - tolerance {
                     // gently slow down playback

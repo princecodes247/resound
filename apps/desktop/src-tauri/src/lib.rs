@@ -40,6 +40,7 @@ use futures_util::stream::StreamExt;
 pub(crate) const SERVICE_TYPE: &str = "_resound-audio._tcp.local.";
 pub(crate) const WS_PATH: &str = "/ws";
 pub(crate) const TARGET_DELAY_MS: u32 = 50;
+pub(crate) const PLAYOUT_DELAY_MS: u64 = 150;
 
 mod commands;
 mod macos_audio;
@@ -304,8 +305,9 @@ pub async fn start_native_audio_capture(
           while aggregate_buf.len() >= target_samples * frame_size {
               let chunk = aggregate_buf.drain(..target_samples * frame_size).collect::<Vec<_>>();
 
+              let playout_timestamp = first_timestamp + PLAYOUT_DELAY_MS;
               let mut final_packet = Vec::with_capacity(8 + chunk.len());
-              final_packet.extend_from_slice(&first_timestamp.to_le_bytes());
+              final_packet.extend_from_slice(&playout_timestamp.to_le_bytes());
               final_packet.extend_from_slice(&chunk);
 
               broadcast_audio_packet(final_packet).await;
@@ -555,6 +557,21 @@ async fn handle_ws_socket(socket: WebSocket) {
     }
 
     match typ {
+      "sync_request" => {
+        let t0 = value.get("t0").and_then(|v| v.as_u64()).unwrap_or(0);
+        let t1 = HOST_START_TIME.lock().unwrap()
+            .as_ref()
+            .map(|s| s.elapsed().as_millis() as u64)
+            .unwrap_or(0);
+        
+        let response = serde_json::json!({
+          "type": "sync_response",
+          "t0": t0,
+          "t1": t1,
+          "t2": t1 // Assuming host processing is negligible
+        });
+        let _ = tx.send(WsMessage::Text(response.to_string()));
+      }
       "offer" => {
         let session_id = value.get("sessionId").and_then(|v| v.as_str()).unwrap_or_default();
         let _receiver_id = value.get("from").and_then(|v| v.as_str()).unwrap_or_default();

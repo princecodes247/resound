@@ -18,6 +18,8 @@ export class WebAudioController {
   private isReceiving = false;
   private nextStartTime = 0;
   private useWorklet = true;
+  private clockOffset = 0; // hostTime ≈ performance.now() + clockOffset
+  private syncInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(options: WebAudioControllerOptions) {
     this.options = options;
@@ -106,12 +108,69 @@ export class WebAudioController {
           }),
         );
         this.options.onStatusChange("receiving");
+
+        // Periodically sync clock with host
+        this.syncInterval = setInterval(() => {
+          if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(
+              JSON.stringify({
+                type: "sync_request",
+                t0: performance.now(),
+              }),
+            );
+          }
+        }, 2000);
+
+        // Initial sync
+        if (this.socket) {
+          this.socket.send(
+            JSON.stringify({
+              type: "sync_request",
+              t0: performance.now(),
+            }),
+          );
+        }
       };
 
       let packetCount = 0;
       this.socket.onmessage = (event) => {
+        if (typeof event.data === "string") {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === "sync_response") {
+              const t0 = msg.t0;
+              const t1 = msg.t1;
+              const t2 = msg.t2;
+              const now = performance.now();
+              const offset = (t1 - t0 + (t2 - now)) / 2;
+
+              if (this.clockOffset === 0) {
+                this.clockOffset = offset;
+              } else {
+                // Smooth adjustment: 80% old, 20% new
+                this.clockOffset = this.clockOffset * 0.8 + offset * 0.2;
+              }
+
+              if (this.useWorklet && this.workletNode) {
+                this.workletNode.port.postMessage({
+                  type: "sync-offset",
+                  offset: this.clockOffset,
+                });
+              }
+            } else if (msg.type === "host_disconnected") {
+              this.options.onLog("Host disconnected explicitly.");
+              this.stop("disconnected");
+            }
+          } catch {
+            // ignore
+          }
+          return;
+        }
+
         if (event.data instanceof ArrayBuffer) {
           packetCount++;
+          const dataView = new DataView(event.data);
+          const playoutTimestamp = dataView.getBigUint64(0, true);
           const audioBytes = event.data.slice(8);
 
           // ensure alignment
@@ -133,19 +192,15 @@ export class WebAudioController {
               payload: pcmData,
               channels,
               sampleRate,
+              timestamp: Number(playoutTimestamp),
             });
           } else if (this.audioContext) {
-            this.playFallback(pcmData, channels, sampleRate);
-          }
-        } else if (typeof event.data === "string") {
-          try {
-            const msg = JSON.parse(event.data);
-            if (msg.type === "host_disconnected") {
-              this.options.onLog("Host disconnected explicitly.");
-              this.stop("disconnected");
-            }
-          } catch {
-            // ignore
+            this.playFallback(
+              pcmData,
+              channels,
+              sampleRate,
+              Number(playoutTimestamp),
+            );
           }
         }
       };
@@ -178,8 +233,15 @@ export class WebAudioController {
     data: Float32Array,
     channels: number,
     sourceRate: number,
+    hostPlayoutTime: number,
   ) {
     if (!this.audioContext) return;
+
+    // Convert host playout time to AudioContext time
+    const hostNow = performance.now() + this.clockOffset;
+    const delayMs = hostPlayoutTime - hostNow;
+    const delaySec = Math.max(0, delayMs / 1000);
+    const targetStartTime = this.audioContext.currentTime + delaySec;
 
     const numFrames = data.length / channels;
     const buffer = this.audioContext.createBuffer(
@@ -203,17 +265,12 @@ export class WebAudioController {
     } else {
       source.connect(this.audioContext.destination);
     }
-
     // Schedule slightly in the future to avoid gaps
-    const now = this.audioContext.currentTime;
-    const targetLeadTime = 0.04; // 40ms head start for local network
 
-    if (this.nextStartTime < now) {
-      // Underflow: restart with target lead time
-      this.nextStartTime = now + targetLeadTime;
-    } else if (this.nextStartTime > now + 0.3) {
-      // Overflow (Lag): If we are > 300ms ahead, jump forward to catch up
-      this.nextStartTime = now + targetLeadTime;
+    if (this.nextStartTime < targetStartTime) {
+      this.nextStartTime = targetStartTime;
+    } else if (this.nextStartTime > targetStartTime + 0.3) {
+      this.nextStartTime = targetStartTime;
     }
 
     source.start(this.nextStartTime);
@@ -228,6 +285,11 @@ export class WebAudioController {
       this.socket.onclose = null;
       this.socket.close();
       this.socket = null;
+    }
+
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+      this.syncInterval = null;
     }
 
     if (this.eqChain) {

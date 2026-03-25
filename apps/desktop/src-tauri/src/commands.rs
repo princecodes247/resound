@@ -160,12 +160,19 @@ pub async fn start_host(
 
   let host_name = format!("resound-host-{short_name}.local.");
 
+  let final_name = name.unwrap_or_else(|| format!("Broadcast {}", short_name));
+  
+  {
+    let mut state = SIGNALING_STATE.write().await;
+    state.sample_rate = sample_rate;
+    state.channels = host_channels;
+    state.name = final_name.clone();
+  }
+
   let mut properties: HashMap<String, String> = HashMap::new();
   properties.insert("sid".to_string(), session_id.clone());
   properties.insert("sr".to_string(), sample_rate.to_string());
   properties.insert("ch".to_string(), host_channels.to_string());
-  
-  let final_name = name.unwrap_or_else(|| format!("Broadcast {}", short_name));
   properties.insert("name".to_string(), final_name);
 
   let service_info = ServiceInfo::new(

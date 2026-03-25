@@ -75,6 +75,7 @@ pub(crate) struct RoutingState {
   pub(crate) broadcast_tx: Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>,
   pub(crate) sample_rate: u32,
   pub(crate) channels: u16,
+  pub(crate) name: String,
 }
 
 fn receiver_key(session_id: &str, receiver_id: &str) -> String {
@@ -327,14 +328,14 @@ async fn info_handler() -> impl axum::response::IntoResponse {
     // Let's just return what we have or add them to RoutingState.
     // For now, let's return a simple JSON.
     
-    let (sr, ch) = {
+    let (sr, ch, name) = {
         let state = SIGNALING_STATE.read().await;
-        (state.sample_rate, state.channels)
+        (state.sample_rate, state.channels, state.name.clone())
     };
     
     axum::Json(serde_json::json!({
         "session_id": sid,
-        "name": "Resound Broadcast", 
+        "name": name, 
         "sample_rate": sr,
         "channels": ch
     }))

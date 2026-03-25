@@ -141,8 +141,25 @@ impl SCStreamOutputTrait for SCKOutput {
             // Let's assume the re-export has it for now.
             if let Some(audio_list) = sample_buffer.audio_buffer_list() {
                 let mut all_data = Vec::new();
-                for buffer in audio_list.iter() {
-                    all_data.extend_from_slice(buffer.data());
+                let buffers: Vec<_> = audio_list.iter().collect();
+                
+                if buffers.len() == 1 {
+                    // Interleaved or Mono
+                    all_data.extend_from_slice(buffers[0].data());
+                } else if buffers.len() > 1 {
+                    // Planar - need to interleave
+                    let buffer_len = buffers[0].data().len();
+                    let num_samples = buffer_len / 4; // Assume f32 (4 bytes)
+                    all_data.reserve(buffer_len * buffers.len());
+                    
+                    for i in 0..num_samples {
+                        for buffer in &buffers {
+                            let start = i * 4;
+                            if start + 4 <= buffer.data().len() {
+                                all_data.extend_from_slice(&buffer.data()[start..start+4]);
+                            }
+                        }
+                    }
                 }
                 
                 let mut packet = Vec::with_capacity(all_data.len() + 8);

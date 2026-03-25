@@ -133,6 +133,8 @@ pub async fn broadcast_audio_packet(packet: Vec<u8>) {
 #[cfg(target_os = "macos")]
 struct SCKOutput {
     first_pts: Arc<Mutex<Option<u64>>>,
+    monitor_buf: Option<Arc<Mutex<VecDeque<f32>>>>,
+    monitor_gain: f32,
 }
 
 #[cfg(target_os = "macos")]
@@ -187,6 +189,25 @@ impl SCStreamOutputTrait for SCKOutput {
                 if let Ok(guard) = BROADCAST_TX.try_read() {
                     if let Some(ref tx) = *guard {
                         let _ = tx.send(packet);
+                    }
+                }
+
+                if let Some(ref buf_arc) = self.monitor_buf {
+                    if let Ok(mut buf) = buf_arc.lock() {
+                        // all_data is Vec<u8> (interleaved f32). Convert back to f32 for monitor.
+                        let float_samples: Vec<f32> = all_data.chunks_exact(4)
+                            .map(|c| f32::from_le_bytes(c.try_into().unwrap()))
+                            .collect();
+
+                        for s in float_samples {
+                            buf.push_back(s * self.monitor_gain);
+                        }
+                        
+                        // Limit buffer to ~1 second
+                        let current_len = buf.len();
+                        if current_len > 48000 * 2 {
+                            buf.drain(0..current_len - 48000);
+                        }
                     }
                 }
             }
@@ -255,6 +276,13 @@ pub async fn start_native_audio_capture(
     let sr = conf.sample_rate().0;
     let ch = conf.channels();
     (Some(dev), Some(conf), sr, ch)
+  };
+
+  // For local monitoring (Initialize early so it can be used by both SCK and CPAL)
+  let monitor_buffer = if monitor {
+      Some(Arc::new(Mutex::new(VecDeque::<f32>::with_capacity(8192))))
+  } else {
+      None
   };
 
   let (tx_broadcast, mut rx_broadcast) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
@@ -342,6 +370,8 @@ pub async fn start_native_audio_capture(
       
       stream.add_output_handler(SCKOutput { 
           first_pts: Arc::new(Mutex::new(None)),
+          monitor_buf: monitor_buffer.clone(),
+          monitor_gain,
       }, SCStreamOutputType::Audio);
       stream.start_capture().map_err(|e| format!("Failed to start SCK stream: {e}"))?;
       
@@ -353,13 +383,6 @@ pub async fn start_native_audio_capture(
 
   let device = device.unwrap();
   let config = config.unwrap();
-
-  // For local monitoring
-  let monitor_buffer = if monitor {
-      Some(Arc::new(Mutex::new(VecDeque::<f32>::with_capacity(8192))))
-  } else {
-      None
-  };
 
   let input_monitor_buffer = monitor_buffer.clone();
   let host_start = *HOST_START_TIME.lock().unwrap();
@@ -441,7 +464,7 @@ pub async fn start_native_audio_capture(
           &output_config.into(),
           move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
               if let Ok(mut buf) = output_monitor_buffer.lock() {
-                  let delay_samples = (sample_rate as u32 * TARGET_DELAY_MS / 1000) as usize;
+                  let delay_samples = (sample_rate as u64 * PLAYOUT_DELAY_MS / 1000) as usize;
 
                   if buf.len() < delay_samples {
                       for s in data.iter_mut() {

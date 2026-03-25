@@ -333,7 +333,7 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
 
     const handleAutoSwitch = async () => {
         try {
-            if (selectedDevice?.toLowerCase().includes('driverless')) {
+            if (!selectedDevice?.toLowerCase().includes('driverless')) {
                 await invoke('set_system_volume', { volume: 100 }).catch(e => console.error("Volume failed", e));
                 await invoke('set_default_audio_device', { isInput: false, name: selectedDevice });
             }

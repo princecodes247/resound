@@ -86,10 +86,13 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <div className={cn(
                   "w-2 h-2 rounded-full",
-                  receiver.status === 'receiving' ? "bg-accent animate-pulse" : "bg-zinc-600"
+                  receiver.status === 'receiving' ? "bg-accent animate-pulse" :
+                    receiver.status === 'disconnected' ? "bg-red-500" : "bg-zinc-600"
                 )} />
                 <span className="text-[10px] font-bold tracking-widest uppercase text-zinc-500">
-                  {receiver.status === 'receiving' ? "Streaming Live" : receiver.status === 'discovering' ? "Searching..." : "Ready"}
+                  {receiver.status === 'receiving' ? "Streaming Live" :
+                    receiver.status === 'disconnected' ? "Host Disconnected" :
+                      receiver.status === 'discovering' ? "Searching..." : "Ready"}
                 </span>
               </div>
               <div className="flex gap-4">

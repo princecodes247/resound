@@ -5,7 +5,12 @@ import { WebAudioController } from "../audio/WebAudioController";
 export const useWebReceiver = () => {
   const [hosts, setHosts] = useState<DiscoveredHost[]>([]);
   const [status, setStatus] = useState<
-    "idle" | "discovering" | "connecting" | "receiving" | "error"
+    | "idle"
+    | "discovering"
+    | "connecting"
+    | "receiving"
+    | "error"
+    | "disconnected"
   >("idle");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [selectedHost, setSelectedHost] = useState<DiscoveredHost | null>(null);

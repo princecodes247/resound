@@ -1,7 +1,7 @@
 export interface WebAudioControllerOptions {
   onLog: (message: string) => void;
   onStatusChange: (
-    status: "idle" | "connecting" | "receiving" | "error",
+    status: "idle" | "connecting" | "receiving" | "error" | "disconnected",
   ) => void;
 }
 
@@ -32,9 +32,13 @@ export class WebAudioController {
     try {
       this.options.onLog(`Initializing AudioContext at ${sampleRate}Hz...`);
       this.audioContext = new (
-        window.AudioContext || (window as any).webkitAudioContext
+        (window as any).AudioContext || (window as any).webkitAudioContext
       )({ sampleRate: 48000 });
-      // )({ sampleRate });
+
+      if (!this.audioContext) {
+        throw new Error("Could not create AudioContext");
+      }
+
       this.options.onLog(
         `AudioContext created. Actual Sample Rate: ${this.audioContext.sampleRate} Hz. State: ${this.audioContext.state}`,
       );
@@ -120,12 +124,29 @@ export class WebAudioController {
           } else if (this.audioContext) {
             this.playFallback(pcmData, channels, sampleRate);
           }
+        } else if (typeof event.data === "string") {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === "host_disconnected") {
+              this.options.onLog("Host disconnected explicitly.");
+              this.stop("disconnected");
+            }
+          } catch {
+            // ignore
+          }
         }
       };
 
       this.socket.onclose = () => {
         this.options.onLog("WebSocket closed.");
-        this.stop();
+        if (this.isReceiving) {
+          this.options.onLog(
+            "Abrupt disconnect detected (socket closed while receiving).",
+          );
+          this.stop("disconnected");
+        } else {
+          this.stop("idle");
+        }
       };
 
       this.socket.onerror = (err) => {
@@ -181,14 +202,23 @@ export class WebAudioController {
     this.nextStartTime += buffer.duration;
   }
 
-  stop() {
-    this.socket?.close();
-    this.socket = null;
+  stop(finalStatus: "idle" | "disconnected" = "idle") {
+    const wasReceiving = this.isReceiving;
+    this.isReceiving = false;
+
+    if (this.socket) {
+      this.socket.onclose = null;
+      this.socket.close();
+      this.socket = null;
+    }
+
     this.workletNode?.disconnect();
     this.workletNode = null;
     this.audioContext?.close();
     this.audioContext = null;
-    this.isReceiving = false;
-    this.options.onStatusChange("idle");
+
+    if (wasReceiving || finalStatus !== "idle") {
+      this.options.onStatusChange(finalStatus);
+    }
   }
 }

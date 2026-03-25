@@ -4,7 +4,9 @@ use std::{
   time::{Duration, Instant},
 };
 
+use axum::extract::ws::Message as WsMessage;
 use axum::{routing::get, Router};
+use serde_json;
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 use tokio::net::TcpListener;
 
@@ -273,6 +275,18 @@ pub async fn discover_hosts(duration_ms: u64) -> Result<Vec<DiscoveredHost>, Str
 
 #[tauri::command]
 pub async fn stop_host() -> Result<(), String> {
+  // 0) Notify receivers
+  {
+    let state = SIGNALING_STATE.read().await;
+    for receiver in state.receivers.values() {
+      let _ = receiver.tx.send(WsMessage::Text(serde_json::json!({
+        "type": "host_disconnected"
+      }).to_string()));
+    }
+  }
+  // Allow a tiny bit of time for messages to be sent before shutting down the server.
+  tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
   // 1) Shutdown websocket server
   if let Some(tx) = SERVER_SHUTDOWN.lock().unwrap().take() {
     let _ = tx.send(());

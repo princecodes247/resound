@@ -584,10 +584,19 @@ pub async fn start_native_receiver(
         let mut last_host_frame: Vec<f32> = Vec::new();
         let mut resample_phase: f64 = 0.0;
         let mut resampled_samples = Vec::with_capacity(2048);
+        let mut explicit_disconnect = false;
 
         while let Some(msg) = read.next().await {
             let data = match msg {
                 Ok(TMessage::Binary(d)) => d,
+                Ok(TMessage::Text(t)) => {
+                    if t.contains("host_disconnected") {
+                        log::info!("Host disconnected explicitly.");
+                        explicit_disconnect = true;
+                        break;
+                    }
+                    continue;
+                }
                 _ => continue,
             };
             if data.len() < 8 { continue; }
@@ -670,7 +679,11 @@ pub async fn start_native_receiver(
                 }
             }
         }
-        log::info!("Receiver WebSocket task stopped.");
+        if explicit_disconnect {
+            log::info!("Receiver WebSocket task finished gracefully.");
+        } else {
+            log::warn!("Receiver WebSocket connection lost abruptly.");
+        }
     });
 
     let mut started = false;

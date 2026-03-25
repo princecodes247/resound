@@ -67,41 +67,56 @@ pub fn list_output_devices() -> Result<Vec<AudioDevice>, String> {
 
 #[tauri::command]
 pub async fn install_driver(app: tauri::AppHandle) -> Result<(), String> {
-  let pkg_path = app.path().resource_dir()
-    .map_err(|e| format!("Failed to get resource dir: {e}"))?
-    .join("resources")
-    .join("blackhole.pkg");
-  
-  log::info!("Looking for driver installer at: {:?}", pkg_path);
-  
-  if !pkg_path.exists() {
-    // Fallback for dev if resources folder is structure differently
-    let dev_path = std::env::current_dir()
-        .map_err(|e| e.to_string())?
-        .join("src-tauri")
-        .join("resources")
-        .join("blackhole.pkg");
-    
-    if dev_path.exists() {
-        log::info!("Found installer in dev path: {:?}", dev_path);
-        std::process::Command::new("open")
-            .arg(dev_path)
-            .spawn()
-            .map_err(|e| format!("Failed to launch installer: {e}"))?;
-        return Ok(());
-    }
-
-    return Err(format!("Installer not found at {:?}", pkg_path));
+  // 1. Try standard base resource (may be flattened)
+  let base_res = app.path().resolve("blackhole.pkg", tauri::path::BaseDirectory::Resource).ok();
+  if let Some(path) = base_res {
+      if path.exists() {
+          log::info!("Launching standard resource: {:?}", path);
+          return launch_pkg(path).await;
+      }
   }
 
-  log::info!("Launching driver installer: {:?}", pkg_path);
-  
-  std::process::Command::new("open")
-    .arg(pkg_path)
-    .spawn()
-    .map_err(|e| format!("Failed to launch installer: {e}"))?;
-  
-  Ok(())
+  // 2. Try nested resource (common structure)
+  let nested_res = app.path().resolve("resources/blackhole.pkg", tauri::path::BaseDirectory::Resource).ok();
+  if let Some(path) = nested_res {
+      if path.exists() {
+          log::info!("Launching nested resource: {:?}", path);
+          return launch_pkg(path).await;
+      }
+  }
+
+  // 3. Dev mode monorepo fallback (cd apps/desktop && cargo tauri dev)
+  let dev_path = std::env::current_dir().map_err(|e| e.to_string())?
+      .join("src-tauri")
+      .join("resources")
+      .join("blackhole.pkg");
+  if dev_path.exists() {
+      log::info!("Found installer in dev path: {:?}", dev_path);
+      return launch_pkg(dev_path).await;
+  }
+
+  // 4. Root monorepo fallback (if ran from root without cd)
+  let root_dev_path = std::env::current_dir().map_err(|e| e.to_string())?
+      .join("apps")
+      .join("desktop")
+      .join("src-tauri")
+      .join("resources")
+      .join("blackhole.pkg");
+  if root_dev_path.exists() {
+      log::info!("Found installer in root dev path: {:?}", root_dev_path);
+      return launch_pkg(root_dev_path).await;
+  }
+
+  Err("Installer not found. Please ensure 'apps/desktop/src-tauri/resources/blackhole.pkg' exists.".to_string())
+}
+
+async fn launch_pkg(path: std::path::PathBuf) -> Result<(), String> {
+    log::info!("Launching driver installer: {:?}", path);
+    std::process::Command::new("open")
+        .arg(path)
+        .spawn()
+        .map_err(|e| format!("Failed to launch installer: {e}"))?;
+    Ok(())
 }
 
 #[tauri::command]

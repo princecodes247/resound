@@ -37,7 +37,9 @@ export class WebAudioController {
     try {
       this.options.onLog(`Initializing AudioContext at ${sampleRate}Hz...`);
       this.audioContext = new (
-        (window as any).AudioContext || (window as any).webkitAudioContext
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext
       )({ sampleRate: 48000 });
 
       if (!this.audioContext) {

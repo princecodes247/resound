@@ -131,8 +131,7 @@ pub async fn broadcast_audio_packet(packet: Vec<u8>) {
 
 #[cfg(target_os = "macos")]
 struct SCKOutput {
-    sample_rate: u32,
-    channels: u16,
+    first_pts: Arc<Mutex<Option<u64>>>,
 }
 
 #[cfg(target_os = "macos")]
@@ -146,37 +145,42 @@ impl SCStreamOutputTrait for SCKOutput {
                 let mut all_data = Vec::new();
                 let buffers: Vec<_> = audio_list.iter().collect();
                 
-                if buffers.len() == 1 {
-                    // Interleaved or Mono
-                    all_data.extend_from_slice(buffers[0].data());
-                } else if buffers.len() > 1 {
+                if buffers.len() > 1 {
                     // Planar - need to interleave
                     let buffer_len = buffers[0].data().len();
                     let num_samples = buffer_len / 4; // Assume f32 (4 bytes)
-                    all_data.reserve(buffer_len * buffers.len());
+                    all_data.resize(buffer_len * buffers.len(), 0);
                     
+                    let out_slice = all_data.as_mut_slice();
                     for i in 0..num_samples {
-                        for buffer in &buffers {
-                            let start = i * 4;
-                            if start + 4 <= buffer.data().len() {
-                                all_data.extend_from_slice(&buffer.data()[start..start+4]);
+                        for (ch, buffer) in buffers.iter().enumerate() {
+                            let src_start = i * 4;
+                            let dst_start = (i * buffers.len() + ch) * 4;
+                            if src_start + 4 <= buffer.data().len() {
+                                out_slice[dst_start..dst_start+4].copy_from_slice(&buffer.data()[src_start..src_start+4]);
                             }
                         }
                     }
+                } else if buffers.len() == 1 {
+                    all_data.extend_from_slice(buffers[0].data());
                 }
                 
-                let num_samples_per_chan = all_data.len() / (4 * self.channels as usize);
-                let duration_ms = (num_samples_per_chan as u64 * 1000) / self.sample_rate as u64;
+                // Use hardware-accurate PTS if available
+                let pts = sample_buffer.presentation_timestamp();
+                let current_pts_ms = (pts.value as f64 * 1000.0 / pts.timescale as f64) as u64;
                 
-                let host_time_ms = if let Ok(start_guard) = HOST_START_TIME.try_lock() {
-                    let elapsed = start_guard.as_ref().map(|s| s.elapsed().as_millis() as u64).unwrap_or(0);
-                    elapsed.saturating_sub(duration_ms)
-                } else {
-                    0
-                };
+                let mut first_pts_guard = self.first_pts.lock().unwrap();
+                if first_pts_guard.is_none() {
+                    *first_pts_guard = Some(current_pts_ms);
+                }
+                
+                let pts_offset = current_pts_ms.saturating_sub(first_pts_guard.unwrap());
+                
+                // Final timestamp: session start relative offset using hardware clock
+                let final_timestamp = pts_offset;
                 
                 let mut packet = Vec::with_capacity(all_data.len() + 8);
-                packet.extend_from_slice(&host_time_ms.to_le_bytes());
+                packet.extend_from_slice(&final_timestamp.to_le_bytes());
                 packet.extend_from_slice(&all_data);
                 
                 if let Ok(guard) = BROADCAST_TX.try_read() {
@@ -334,7 +338,9 @@ pub async fn start_native_audio_capture(
       
       let mut stream = SCStream::new(&filter, &sck_config);
       
-      stream.add_output_handler(SCKOutput { sample_rate, channels }, SCStreamOutputType::Audio);
+      stream.add_output_handler(SCKOutput { 
+          first_pts: Arc::new(Mutex::new(None)),
+      }, SCStreamOutputType::Audio);
       stream.start_capture().map_err(|e| format!("Failed to start SCK stream: {e}"))?;
       
       return Ok((AudioStream::SCK(stream), sample_rate, channels));

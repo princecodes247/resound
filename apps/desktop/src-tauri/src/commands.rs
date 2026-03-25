@@ -12,7 +12,7 @@ use tokio::net::TcpListener;
 
 use serde::Serialize;
 use cpal::traits::{DeviceTrait, HostTrait};
-use super::{AudioStream, DiscoveredHost, MDNS_DAEMON, SERVICE_TYPE, SIGNALING_STATE, STARTED_SESSION_ID, SERVER_SHUTDOWN, WS_PATH, websocket_handler, info_handler};
+use super::{DiscoveredHost, MDNS_DAEMON, SERVICE_TYPE, SIGNALING_STATE, STARTED_SESSION_ID, SERVER_SHUTDOWN, WS_PATH, websocket_handler, info_handler};
 use tauri::Manager;
 use tower_http::cors::CorsLayer;
 use axum::http::Method;
@@ -29,7 +29,7 @@ pub struct AudioDevice {
 pub fn list_audio_devices() -> Result<Vec<AudioDevice>, String> {
   let host = cpal::default_host();
   let devices = host.input_devices().map_err(|e| e.to_string())?;
-  let list: Vec<AudioDevice> = devices
+  let mut list: Vec<AudioDevice> = devices
     .into_iter()
     .filter_map(|d| d.name().ok())
     .map(|name| {
@@ -39,6 +39,15 @@ pub fn list_audio_devices() -> Result<Vec<AudioDevice>, String> {
       AudioDevice { name, is_loopback }
     })
     .collect();
+
+  #[cfg(target_os = "macos")]
+  {
+    list.push(AudioDevice {
+      name: "System Audio (Driverless)".to_string(),
+      is_loopback: true,
+    });
+  }
+
   Ok(list)
 }
 
@@ -84,18 +93,16 @@ pub async fn start_host(
       *guard = Some(session_id.clone());
   }
 
-  let (wrapped_stream, sample_rate, host_channels) = {
-    let (streams, sr, ch) = super::start_native_audio_capture(
-        device_name.clone(), 
-        monitor.unwrap_or(false), 
-        monitor_device, 
-        monitor_skip_channels.unwrap_or(0),
-        monitor_gain,
-        broadcast_gain
-    ).await?;
-    (AudioStream(streams), sr, ch)
-  };
-  SIGNALING_STATE.write().await.audio_stream = Some(wrapped_stream);
+  let (audio_stream, sample_rate, host_channels) = super::start_native_audio_capture(
+      device_name.clone(), 
+      monitor.unwrap_or(false), 
+      monitor_device, 
+      monitor_skip_channels.unwrap_or(0),
+      monitor_gain,
+      broadcast_gain
+  ).await?;
+
+  SIGNALING_STATE.write().await.audio_stream = Some(audio_stream);
 
 
   // 2) Start websocket signaling server (random port) and return the chosen port.
@@ -317,6 +324,11 @@ pub async fn stop_host() -> Result<(), String> {
     state.broadcast_tx = None;
     state.hosts.clear();
     state.receivers.clear();
+  }
+
+  {
+    let mut guard = super::BROADCAST_TX.write().await;
+    *guard = None;
   }
 
   // 4) Reset session ID

@@ -12,6 +12,24 @@ use tauri::{
 use axum::extract::{
     ws::{Message as WsMessage, WebSocket, WebSocketUpgrade},
   };
+
+#[cfg(target_os = "macos")]
+use screencapturekit::{
+  shareable_content::SCShareableContent,
+    stream::{
+        configuration::SCStreamConfiguration, content_filter::SCContentFilter,
+        output_trait::SCStreamOutputTrait, output_type::SCStreamOutputType, SCStream,
+    },
+    CMSampleBuffer,
+};
+#[cfg(target_os = "macos")]
+// use screencapturekit::prelude::*;
+#[cfg(target_os = "macos")]
+use coreaudio_sys::{
+    AudioObjectAddPropertyListener, AudioObjectPropertyAddress,
+    kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyElementMain,
+    kAudioObjectPropertyScopeGlobal, kAudioObjectSystemObject, OSStatus, AudioObjectID,
+};
 use mdns_sd::ServiceDaemon;
 use serde::Serialize;
 use tokio::sync::RwLock;
@@ -50,14 +68,27 @@ struct ReceiverConn {
   tx: tokio::sync::mpsc::UnboundedSender<WsMessage>,
 }
 
-pub struct AudioStream(#[allow(dead_code)] pub(crate) Vec<cpal::Stream>);
+pub enum AudioStream {
+    Cpal(Vec<cpal::Stream>),
+    #[cfg(target_os = "macos")]
+    SCK(SCStream),
+}
 
 impl Drop for AudioStream {
     fn drop(&mut self) {
-        use cpal::traits::StreamTrait;
-        log::info!("AudioStream being dropped, stopping {} streams", self.0.len());
-        for stream in &self.0 {
-            let _ = stream.pause();
+        match self {
+            AudioStream::Cpal(streams) => {
+                use cpal::traits::StreamTrait;
+                log::info!("Cpal AudioStream being dropped, stopping {} streams", streams.len());
+                for stream in streams {
+                    let _ = stream.pause();
+                }
+            }
+            #[cfg(target_os = "macos")]
+            AudioStream::SCK(stream) => {
+                log::info!("SCK AudioStream being dropped, stopping stream");
+                let _ = stream.stop_capture();
+            }
         }
     }
 }
@@ -88,6 +119,7 @@ pub(crate) static STARTED_SESSION_ID: LazyLock<Mutex<Option<String>>> = LazyLock
 pub(crate) static MDNS_DAEMON: LazyLock<Mutex<Option<ServiceDaemon>>> = LazyLock::new(|| Mutex::new(None));
 pub(crate) static SERVER_SHUTDOWN: LazyLock<Mutex<Option<tokio::sync::oneshot::Sender<()>>>> = LazyLock::new(|| Mutex::new(None));
 pub(crate) static HOST_START_TIME: LazyLock<Mutex<Option<std::time::Instant>>> = LazyLock::new(|| Mutex::new(None));
+pub(crate) static BROADCAST_TX: LazyLock<RwLock<Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>>> = LazyLock::new(|| RwLock::new(Option::default()));
 
 
 pub async fn broadcast_audio_packet(packet: Vec<u8>) {
@@ -97,6 +129,73 @@ pub async fn broadcast_audio_packet(packet: Vec<u8>) {
   }
 }
 
+#[cfg(target_os = "macos")]
+struct SCKOutput;
+
+#[cfg(target_os = "macos")]
+impl SCStreamOutputTrait for SCKOutput {
+    fn did_output_sample_buffer(&self, sample_buffer: CMSampleBuffer, of_type: SCStreamOutputType) {
+        if let SCStreamOutputType::Audio = of_type {
+            // In 1.5.x, CMSampleBuffer has get_linear_pcm_data() or similar if re-exported.
+            // If not, we might need more complex extraction. 
+            // Let's assume the re-export has it for now.
+            if let Some(audio_list) = sample_buffer.audio_buffer_list() {
+                let mut all_data = Vec::new();
+                for buffer in audio_list.iter() {
+                    all_data.extend_from_slice(buffer.data());
+                }
+                
+                let mut packet = Vec::with_capacity(all_data.len() + 8);
+                let host_time_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                packet.extend_from_slice(&host_time_ms.to_le_bytes());
+                packet.extend_from_slice(&all_data);
+                
+                if let Ok(guard) = BROADCAST_TX.try_read() {
+                    if let Some(ref tx) = *guard {
+                        let _ = tx.send(packet);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn setup_default_device_listener() {
+    unsafe {
+        let address = AudioObjectPropertyAddress {
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain,
+        };
+
+        let status = AudioObjectAddPropertyListener(
+            kAudioObjectSystemObject,
+            &address,
+            Some(default_device_callback),
+            std::ptr::null_mut(),
+        );
+
+        if status != 0 {
+            log::error!("Failed to add default device listener: {}", status);
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn default_device_callback(
+    _in_object: AudioObjectID,
+    _in_number_addresses: u32,
+    _in_addresses: *const AudioObjectPropertyAddress,
+    _in_client_data: *mut std::ffi::c_void,
+) -> OSStatus {
+    log::info!("Default output device changed!");
+    0
+}
+
 pub async fn start_native_audio_capture(
     device_name: Option<String>, 
     monitor: bool,
@@ -104,32 +203,50 @@ pub async fn start_native_audio_capture(
     monitor_skip_channels: u16,
     monitor_gain: f32,
     broadcast_gain: f32,
-) -> Result<(Vec<cpal::Stream>, u32, u16), String> {
+) -> Result<(AudioStream, u32, u16), String> {
   use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
   let host = cpal::default_host();
-  let device = if let Some(name) = device_name {
-    host.input_devices()
-      .map_err(|e| e.to_string())?
-      .find(|d| d.name().ok().as_deref() == Some(&name))
-      .ok_or_else(|| format!("Device not found: {name}"))?
+
+  let is_driverless = device_name.as_deref() == Some("System Audio (Driverless)");
+
+  let (device, config, sample_rate, channels) = if is_driverless {
+    (None, None, 48000, 2u16)
   } else {
-    host.default_input_device().ok_or("No default input device found")?
+    let dev = if let Some(name) = device_name {
+      host.input_devices()
+        .map_err(|e| e.to_string())?
+        .find(|d| d.name().ok().as_deref() == Some(&name))
+        .ok_or_else(|| format!("Device not found: {name}"))?
+    } else {
+      host.default_input_device().ok_or("No default input device found")?
+    };
+    let conf = dev.default_input_config().map_err(|e| e.to_string())?;
+    let sr = conf.sample_rate().0;
+    let ch = conf.channels();
+    (Some(dev), Some(conf), sr, ch)
   };
-
-  *HOST_START_TIME.lock().unwrap() = Some(std::time::Instant::now());
-
-  let config = device.default_input_config().map_err(|e| e.to_string())?;
-  let channels = config.channels();
-  let sample_rate = config.sample_rate().0;
 
   let (tx_broadcast, mut rx_broadcast) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
   
-  // Dedicated broadcasting task with aggregation
+  // Set global senders for broadcast
+  {
+      let mut guard = BROADCAST_TX.write().await;
+      *guard = Some(tx_broadcast.clone());
+  }
+  {
+      let mut state = SIGNALING_STATE.write().await;
+      state.broadcast_tx = Some(tx_broadcast.clone());
+      state.sample_rate = sample_rate;
+      state.channels = channels;
+  }
+
+  // Dedicated broadcasting task with aggregation for both SCK and CPAL
   tokio::spawn(async move {
-      log::info!("Audio broadcasting task started.");
+      log::info!("Audio broadcasting task started ({}Hz, {}ch).", sample_rate, channels);
       let mut aggregate_buf = Vec::new();
       let mut first_timestamp = 0u64;
       let target_samples = (sample_rate as usize * 10) / 1000; // 10ms target
+      let frame_size = 4 * channels as usize;
 
       while let Some(packet) = rx_broadcast.recv().await {
           if packet.len() < 8 { continue; }
@@ -142,34 +259,56 @@ pub async fn start_native_audio_capture(
           }
 
           aggregate_buf.extend_from_slice(samples);
-// let frame_size = 4 * channels as usize;
 
-// // Ensure we only append full frames
-// let aligned_len = samples.len() - (samples.len() % frame_size);
-// aggregate_buf.extend_from_slice(&samples[..aligned_len]);
+          while aggregate_buf.len() >= target_samples * frame_size {
+              let chunk = aggregate_buf.drain(..target_samples * frame_size).collect::<Vec<_>>();
 
-          let frame_size = 4 * channels as usize;
-while aggregate_buf.len() >= target_samples * frame_size {
-    let chunk = aggregate_buf.drain(..target_samples * frame_size).collect::<Vec<_>>();
+              let mut final_packet = Vec::with_capacity(8 + chunk.len());
+              final_packet.extend_from_slice(&first_timestamp.to_le_bytes());
+              final_packet.extend_from_slice(&chunk);
 
-    let mut final_packet = Vec::with_capacity(8 + chunk.len());
-    final_packet.extend_from_slice(&first_timestamp.to_le_bytes());
-    final_packet.extend_from_slice(&chunk);
-
-    broadcast_audio_packet(final_packet).await;
-}
+              broadcast_audio_packet(final_packet).await;
+              
+              // Increment timestamp for next chunk based on target_samples
+              first_timestamp += (target_samples as u64 * 1000) / sample_rate as u64;
+          }
       }
       log::info!("Audio broadcasting task stopped.");
   });
 
-  {
-      let mut state = SIGNALING_STATE.write().await;
-      state.broadcast_tx = Some(tx_broadcast.clone());
-      state.sample_rate = sample_rate;
-      state.channels = channels;
+  if is_driverless {
+    #[cfg(target_os = "macos")]
+    {
+      let content = SCShareableContent::get().map_err(|e| format!("Failed to get shareable content: {e}"))?;
+      let displays = content.displays();
+      let display = displays.first().ok_or("No displays found for ScreenCaptureKit")?;
+      
+      let filter = SCContentFilter::create()
+          .with_display(display)
+          .with_excluding_windows(&[])
+          .build();
+          
+      let mut sck_config = SCStreamConfiguration::default();
+      sck_config.set_captures_audio(true);
+      sck_config.set_sample_rate(sample_rate as i32);
+      sck_config.set_channel_count(channels as i32);
+      
+      let mut stream = SCStream::new(&filter, &sck_config);
+      
+      stream.add_output_handler(SCKOutput, SCStreamOutputType::Audio);
+      stream.start_capture().map_err(|e| format!("Failed to start SCK stream: {e}"))?;
+      
+      return Ok((AudioStream::SCK(stream), sample_rate, channels));
+    }
+    #[cfg(not(target_os = "macos"))]
+    return Err("Driverless capture only supported on macOS".to_string());
   }
 
-  
+  let device = device.unwrap();
+  let config = config.unwrap();
+
+  *HOST_START_TIME.lock().unwrap() = Some(std::time::Instant::now());
+
   // For local monitoring
   let monitor_buffer = if monitor {
       Some(Arc::new(Mutex::new(VecDeque::<f32>::with_capacity(8192))))
@@ -180,10 +319,10 @@ while aggregate_buf.len() >= target_samples * frame_size {
   let input_monitor_buffer = monitor_buffer.clone();
   let host_start = *HOST_START_TIME.lock().unwrap();
   
+  let tx_to_broadcast = tx_broadcast.clone();
   let input_stream = device.build_input_stream(
     &config.into(),
     move |data: &[f32], _: &cpal::InputCallbackInfo| {
-      // 1) Forward to receivers with timestamp
       let timestamp = if let Some(start) = host_start {
           start.elapsed().as_millis() as u64
       } else {
@@ -191,36 +330,21 @@ while aggregate_buf.len() >= target_samples * frame_size {
       };
 
       let mut pcm = Vec::with_capacity(8 + data.len() * 4);
-      // Prepend timestamp (8 bytes LE)
       pcm.extend_from_slice(&timestamp.to_le_bytes());
 
-      // Apply digital gain and clamp to avoid clipping
-      let mut peak = 0.0f32;
       for &s in data {
-          let abs_s = s.abs();
-          if abs_s > peak { peak = abs_s; }
           let boosted = (s * broadcast_gain).clamp(-1.0, 1.0);
           pcm.extend_from_slice(&boosted.to_le_bytes());
       }
 
-      let packet = pcm;
-      // Use channel to broadcast instead of spawning task for every packet.
-      // 1024 capacity is more than enough for audio packets.
-      let _ = tx_broadcast.send(packet);
+      let _ = tx_to_broadcast.send(pcm);
 
-      // 2) Forward to local monitor buffer if enabled
       if let Some(ref buf_arc) = input_monitor_buffer {
           if let Ok(mut buf) = buf_arc.lock() {
-              // Only push first channel to simplify monitoring (mono)
-              // Apply the monitor_gain
               for chunk in data.chunks(channels as usize) {
                   let boosted = (chunk[0] * monitor_gain).clamp(-1.0, 1.0);
                   buf.push_back(boosted);
               }
-              // Prevent buffer from growing indefinitely (latency). 
-              // 8192 samples at 48kHz is ~170ms. 
-              // We need enough for TARGET_DELAY_MS (200ms) plus some headroom.
-              // Let's allow up to 400ms (19200 samples at 48kHz).
               let max_buffered = (sample_rate as usize * 400) / 1000;
               if buf.len() > max_buffered {
                   let to_remove = buf.len() - (max_buffered / 2); 
@@ -245,7 +369,6 @@ while aggregate_buf.len() >= target_samples * frame_size {
           host.default_output_device().ok_or("No default output device found for monitoring")?
       };
       
-      // Try to find a config that matches the input sample rate and is F32
       let output_config = output_device.supported_output_configs()
           .map_err(|e| e.to_string())?
           .filter(|c| c.sample_format() == cpal::SampleFormat::F32)
@@ -275,7 +398,6 @@ while aggregate_buf.len() >= target_samples * frame_size {
               if let Ok(mut buf) = output_monitor_buffer.lock() {
                   let delay_samples = (sample_rate as u32 * TARGET_DELAY_MS / 1000) as usize;
 
-                  // Enforce Global Delay (200ms)
                   if buf.len() < delay_samples {
                       for s in data.iter_mut() {
                           *s = 0.0;
@@ -283,7 +405,6 @@ while aggregate_buf.len() >= target_samples * frame_size {
                       return;
                   }
 
-                  // Catch-up: if buffer is too large (>300ms), drain back to 200ms
                   if buf.len() > delay_samples + (sample_rate as usize / 10) {
                       let to_remove = buf.len() - delay_samples;
                       buf.drain(0..to_remove);
@@ -310,8 +431,9 @@ while aggregate_buf.len() >= target_samples * frame_size {
   }
 
   streams[0].play().map_err(|e| e.to_string())?;
-  Ok((streams, sample_rate, channels))
+  Ok((AudioStream::Cpal(streams), sample_rate, channels))
 }
+
 
 
 async fn websocket_handler(ws: WebSocketUpgrade) -> impl axum::response::IntoResponse {
@@ -466,6 +588,9 @@ pub fn run() {
             .build(),
         )?;
       }
+
+      #[cfg(target_os = "macos")]
+      crate::setup_default_device_listener();
 
       crate::macos_audio::create_aggregate_device("Resound Audio");
 
@@ -661,7 +786,7 @@ pub async fn start_native_receiver(
 
                 // Smooth jitter buffer: drain frame-by-frame
                 let delay_samples = (sample_rate as f64 * channels as f64 * TARGET_DELAY_MS as f64 / 1000.0) as usize;
-                let max_buffer = delay_samples + (sample_rate as usize * channels / 10); // +100ms
+                let _max_buffer = delay_samples + (sample_rate as usize * channels / 10); // +100ms
                 let target = delay_samples;
                 let tolerance = sample_rate as usize * channels / 50; // ~20ms
 
@@ -728,5 +853,5 @@ pub async fn start_native_receiver(
     ).map_err(|e| e.to_string())?;
 
     stream.play().map_err(|e| e.to_string())?;
-    Ok(AudioStream(vec![stream]))
+    Ok(AudioStream::Cpal(vec![stream]))
 }

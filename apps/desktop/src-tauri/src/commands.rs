@@ -11,6 +11,7 @@ use tokio::net::TcpListener;
 use serde::Serialize;
 use cpal::traits::{DeviceTrait, HostTrait};
 use super::{AudioStream, DiscoveredHost, MDNS_DAEMON, SERVICE_TYPE, SIGNALING_STATE, STARTED_SESSION_ID, SERVER_SHUTDOWN, WS_PATH, websocket_handler, info_handler};
+use tauri::Manager;
 use tower_http::cors::CorsLayer;
 use axum::http::Method;
 
@@ -57,6 +58,7 @@ pub fn list_output_devices() -> Result<Vec<AudioDevice>, String> {
 
 #[tauri::command]
 pub async fn start_host(
+    app: tauri::AppHandle,
     session_id: String, 
     device_name: Option<String>,
     name: Option<String>,
@@ -66,15 +68,18 @@ pub async fn start_host(
     monitor_gain: f32,
     broadcast_gain: f32
 ) -> Result<u16, String> {
-  // If already started, stop it first.
-  if STARTED_SESSION_ID.lock().unwrap().is_some() {
-    let _ = stop_host().await;
-  }
-  
-  // Set the fresh session ID.
+  // 1) Stop existing host if any
   {
-    let mut guard = STARTED_SESSION_ID.lock().unwrap();
-    *guard = Some(session_id.clone());
+      let is_started = STARTED_SESSION_ID.lock().unwrap().is_some();
+      if is_started {
+          stop_host().await?;
+      }
+  }
+
+  // 2) Set fresh session ID
+  {
+      let mut guard = STARTED_SESSION_ID.lock().unwrap();
+      *guard = Some(session_id.clone());
   }
 
   let (wrapped_stream, sample_rate, host_channels) = {
@@ -101,9 +106,35 @@ pub async fn start_host(
   *SERVER_SHUTDOWN.lock().unwrap() = Some(tx);
 
   tokio::spawn(async move {
+    // In Tauri v2, we should use the path resolver. 
+    // For development, we might need to look in src-tauri/web_dist if launched from apps/desktop
+    let mut web_dir = app.path().resource_dir().unwrap_or_default().join("web_dist");
+    
+    if !web_dir.exists() {
+        // Fallback for development: check current_dir/src-tauri/web_dist
+        if let Ok(cwd) = std::env::current_dir() {
+            let dev_path = cwd.join("src-tauri").join("web_dist");
+            if dev_path.exists() {
+                web_dir = dev_path;
+            } else {
+                // Try direct web_dist in case it's there
+                let direct_path = cwd.join("web_dist");
+                if direct_path.exists() {
+                    web_dir = direct_path;
+                }
+            }
+        }
+    }
+
+    log::info!("Serving web_dist from: {:?}", web_dir);
+
     let app = Router::new()
         .route(WS_PATH, get(websocket_handler))
         .route("/info", get(info_handler))
+        .fallback_service(
+            tower_http::services::ServeDir::new(&web_dir)
+                .not_found_service(tower_http::services::ServeFile::new(web_dir.join("index.html")))
+        )
         .layer(CorsLayer::new()
             .allow_origin(tower_http::cors::Any)
             .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
@@ -117,13 +148,7 @@ pub async fn start_host(
   });
 
   // 3) Start mDNS responder advertising this session id.
-
-  let ip = local_ip_address::local_ip().map_err(|e| format!("Failed to get local IP: {e}"))?;
-  let ip_v4: Option<IpAddr> = match ip {
-    IpAddr::V4(_) => Some(ip),
-    IpAddr::V6(_) => None,
-  };
-  let ip = ip_v4.unwrap_or(IpAddr::from([127, 0, 0, 1]));
+  let ip = get_lan_ip()?;
 
   let short_name = session_id
     .chars()
@@ -176,12 +201,12 @@ pub async fn discover_hosts(duration_ms: u64) -> Result<Vec<DiscoveredHost>, Str
       break;
     }
 
-    let event = tokio::time::timeout(Duration::from_millis(250), receiver.recv_async())
-      .await
-      .map_err(|_| "mDNS timeout".to_string());
+    let timeout_duration = Duration::from_millis(250);
+    let event = tokio::time::timeout(timeout_duration, receiver.recv_async()).await;
 
-    let Ok(Ok(event)) = event else {
-      continue;
+    let event = match event {
+        Ok(Ok(ev)) => ev,
+        _ => continue, // Ignore timeout or internal browse error
     };
 
     match event {
@@ -233,6 +258,12 @@ pub async fn discover_hosts(duration_ms: u64) -> Result<Vec<DiscoveredHost>, Str
       }
       _ => {}
     }
+  }
+
+  // 10) Ensure daemon is shut down before returning
+  match daemon.shutdown() {
+      Ok(recv) => { let _ = recv.recv_timeout(Duration::from_millis(100)); }
+      Err(e) => log::error!("Failed to shutdown mDNS discovery daemon: {e}"),
   }
 
   let mut out: Vec<DiscoveredHost> = by_session_id.into_values().collect();
@@ -339,7 +370,34 @@ pub fn set_system_volume(volume: u32) -> Result<(), String> {
 }
 #[tauri::command]
 pub fn get_local_ip() -> Result<String, String> {
-  local_ip_address::local_ip()
-    .map(|ip| ip.to_string())
-    .map_err(|e| e.to_string())
+  get_lan_ip().map(|ip| ip.to_string())
+}
+
+fn get_lan_ip() -> Result<IpAddr, String> {
+    let interfaces = local_ip_address::list_afinet_netifas()
+        .map_err(|e| format!("Failed to list network interfaces: {e}"))?;
+    
+    let mut lan_ips = Vec::new();
+    
+    for (_name, ip) in interfaces {
+        if let IpAddr::V4(v4) = ip {
+            if v4.is_loopback() { continue; }
+            
+            let octets = v4.octets();
+            // Prioritize standard private LAN ranges
+            let is_private = (octets[0] == 192 && octets[1] == 168) ||
+                            (octets[0] == 10) ||
+                            (octets[0] == 172 && (16..=31).contains(&octets[1]));
+            
+            lan_ips.push((is_private, v4));
+        }
+    }
+    
+    // Sort: Private IPs first
+    lan_ips.sort_by(|a, b| b.0.cmp(&a.0));
+    
+    lan_ips.into_iter()
+        .next()
+        .map(|(_, ip)| IpAddr::V4(ip))
+        .ok_or_else(|| "No suitable LAN interface found (VPN/Docker might be active)".to_string())
 }

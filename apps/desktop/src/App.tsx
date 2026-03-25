@@ -65,7 +65,7 @@ export default function App() {
     // Settings State
     const [showSettings, setShowSettings] = useState(false);
     const [broadcastName, setBroadcastName] = useState('');
-    const [selectedDevice, setSelectedDevice] = useState('');
+    const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
     const [localIp, setLocalIp] = useState<string | null>(null);
 
     useEffect(() => {
@@ -79,20 +79,26 @@ export default function App() {
             .then(id => setBroadcastName(getDeterministicName(id)))
             .catch(() => setBroadcastName(generateBroadcastName()));
     }, []);
-    const [monitorDevice, setMonitorDevice] = useState('');
+    const [monitorDevice, setMonitorDevice] = useState<string | null>(null);
     const [monitorGain, setMonitorGain] = useState(1.0);
     const [broadcastGain, setBroadcastGain] = useState(1.0);
     const [outputGain, setOutputGain] = useState(1.0);
 
-    // Auto-select "Resound Audio" for monitor device if available
+    // Auto-select "Resound Audio" for monitor device and blackhole for input device if available
     useEffect(() => {
-        if (!monitorDevice && host.outputDevices?.length > 0) {
-            const testDev = host.outputDevices.find((d: any) => d.name.toLowerCase().includes('resound audio'));
-            if (testDev) {
-                setMonitorDevice(testDev.name);
+        if (monitorDevice === null && host.outputDevices?.length > 0) {
+            const resoundAudio = host.outputDevices.find((d: any) => d.name.toLowerCase().includes('resound audio'));
+            if (resoundAudio) {
+                setMonitorDevice(resoundAudio.name);
             }
         }
-    }, [host.outputDevices]);
+        if (selectedDevice === null && host.devices?.length > 0) {
+            const blackhole = host.devices.find((d: any) => d.name.toLowerCase().includes('blackhole'));
+            if (blackhole) {
+                setSelectedDevice(blackhole.name);
+            }
+        }
+    }, [host.outputDevices, host.devices]);
 
     // Prevent mode switching if mid-operation
     const isBroadcasting = host.status === 'broadcasting' || host.status === 'starting';
@@ -234,7 +240,7 @@ export default function App() {
                                     <label className="block mb-2 text-xs font-semibold tracking-wider uppercase text-zinc-500">Local Monitor Output</label>
                                     <div className="relative">
                                         <select
-                                            value={monitorDevice}
+                                            value={monitorDevice ?? ''}
                                             onChange={(e) => setMonitorDevice(e.target.value)}
                                             className="w-full px-4 py-3 text-sm text-white transition-colors border appearance-none cursor-pointer bg-zinc-900/50 border-white/10 rounded-xl focus:outline-none focus:border-white/30"
                                         >
@@ -298,9 +304,9 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
             const currentOutput = await invoke<string>('get_default_audio_device', { isInput: false });
 
             const isBlackHole = currentInput.toLowerCase().includes('blackhole');
-            const isTestDev = currentOutput.toLowerCase().includes('resound audio');
+            const isResoundAudio = currentOutput.toLowerCase().includes('resound audio');
 
-            if (!isBlackHole || !isTestDev) {
+            if (!isBlackHole || !isResoundAudio) {
                 const currentVolume = await invoke<number>('get_system_volume').catch(() => null);
                 setOriginalDevices({ input: currentInput, output: currentOutput, volume: currentVolume });
                 setShowAudioPrompt(true);
@@ -317,7 +323,7 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
         host.startHost({
             deviceName: selectedDevice || null,
             name: broadcastName || null,
-            monitor: monitorDevice !== '',
+            monitor: !!monitorDevice,
             monitorDevice: monitorDevice || null,
             monitorSkipChannels: 0,
             monitorGain,
@@ -378,7 +384,7 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
                         <label className="block px-2 mb-3 text-xs font-semibold tracking-wider uppercase text-zinc-500">Input Source</label>
                         <div className="relative">
                             <select
-                                value={selectedDevice}
+                                value={selectedDevice ?? ''}
                                 onChange={(e) => setSelectedDevice(e.target.value)}
                                 className="w-full px-5 py-4 text-sm text-white transition-colors border appearance-none cursor-pointer bg-zinc-900/50 border-white/10 rounded-2xl focus:outline-none focus:border-white/30"
                             >
@@ -418,7 +424,7 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
                     <div className="flex flex-col items-center w-full max-w-sm gap-4 p-6 text-center border bg-white/5 border-white/10 rounded-3xl">
                         <div className="p-3 bg-white shadow-xl rounded-2xl">
                             <QRCodeCanvas
-                                value={`${(import.meta as any).env.VITE_WEB_URL ?? `http://${localIp}:5174`}/?host=${localIp}:${host.signalingPort}&sid=${host.sessionId}`}
+                                value={`http://${localIp}:${host.signalingPort}/?host=${localIp}:${host.signalingPort}&sid=${host.sessionId}`}
                                 size={140}
                                 level="M"
                             />

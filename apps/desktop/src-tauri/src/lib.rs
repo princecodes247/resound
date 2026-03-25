@@ -656,12 +656,13 @@ pub fn run() {
       commands::list_output_devices,
       commands::start_receiver,
       commands::stop_receiver,
-      commands::get_device_id,
       commands::get_default_audio_device,
       commands::set_default_audio_device,
-      commands::get_system_volume,
+      commands::get_device_id,
       commands::set_system_volume,
-      commands::get_local_ip
+      commands::get_local_ip,
+      commands::install_driver,
+      commands::check_driver_installed
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

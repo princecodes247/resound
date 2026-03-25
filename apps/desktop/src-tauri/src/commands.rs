@@ -65,6 +65,60 @@ pub fn list_output_devices() -> Result<Vec<AudioDevice>, String> {
   Ok(list)
 }
 
+#[tauri::command]
+pub async fn install_driver(app: tauri::AppHandle) -> Result<(), String> {
+  let pkg_path = app.path().resource_dir()
+    .map_err(|e| format!("Failed to get resource dir: {e}"))?
+    .join("resources")
+    .join("blackhole.pkg");
+  
+  log::info!("Looking for driver installer at: {:?}", pkg_path);
+  
+  if !pkg_path.exists() {
+    // Fallback for dev if resources folder is structure differently
+    let dev_path = std::env::current_dir()
+        .map_err(|e| e.to_string())?
+        .join("src-tauri")
+        .join("resources")
+        .join("blackhole.pkg");
+    
+    if dev_path.exists() {
+        log::info!("Found installer in dev path: {:?}", dev_path);
+        std::process::Command::new("open")
+            .arg(dev_path)
+            .spawn()
+            .map_err(|e| format!("Failed to launch installer: {e}"))?;
+        return Ok(());
+    }
+
+    return Err(format!("Installer not found at {:?}", pkg_path));
+  }
+
+  log::info!("Launching driver installer: {:?}", pkg_path);
+  
+  std::process::Command::new("open")
+    .arg(pkg_path)
+    .spawn()
+    .map_err(|e| format!("Failed to launch installer: {e}"))?;
+  
+  Ok(())
+}
+
+#[tauri::command]
+pub fn check_driver_installed() -> bool {
+  let host = cpal::default_host();
+  if let Ok(devices) = host.input_devices() {
+    for device in devices {
+      if let Ok(name) = device.name() {
+        if name.to_lowercase().contains("blackhole 2ch") {
+          return true;
+        }
+      }
+    }
+  }
+  false
+}
+
 
 
 #[tauri::command]

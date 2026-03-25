@@ -7,6 +7,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { invoke } from '@tauri-apps/api/core';
 import { QRCodeCanvas } from 'qrcode.react';
+import { DriverSetupFlow } from './components/DriverSetupFlow';
 
 // --- Utility ---
 function cn(...inputs: ClassValue[]) {
@@ -197,6 +198,7 @@ export default function App() {
                                 selectedDevice={selectedDevice}
                                 setSelectedDevice={setSelectedDevice}
                                 monitorDevice={monitorDevice}
+                                setMonitorDevice={setMonitorDevice}
                                 monitorGain={monitorGain}
                                 broadcastGain={broadcastGain}
                                 theme={myTheme}
@@ -293,23 +295,30 @@ function SettingsSlider({ label, value, onChange }: { label: string, value: numb
     );
 }
 
-function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, setSelectedDevice, monitorDevice, monitorGain, broadcastGain, theme, localIp }: any) {
+function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, setSelectedDevice, monitorDevice, setMonitorDevice, monitorGain, broadcastGain, theme, localIp }: any) {
     const isBroadcasting = host.status === 'broadcasting';
-    const [showAudioPrompt, setShowAudioPrompt] = useState(false);
+    const [showDriverSetup, setShowDriverSetup] = useState(false);
     const [originalDevices, setOriginalDevices] = useState<{ input: string, output: string, volume: number | null } | null>(null);
 
     const handleStart = async () => {
         try {
+            const installed = await invoke<boolean>('check_driver_installed');
+            if (!installed) {
+                setShowDriverSetup(true);
+                return;
+            }
+
             const currentInput = await invoke<string>('get_default_audio_device', { isInput: true });
             const currentOutput = await invoke<string>('get_default_audio_device', { isInput: false });
 
             const isBlackHole = currentInput.toLowerCase().includes('blackhole');
-            const isResoundAudio = currentOutput.toLowerCase().includes('resound audio');
 
-            if (!isBlackHole || !isResoundAudio) {
+            if (!isBlackHole) {
                 const currentVolume = await invoke<number>('get_system_volume').catch(() => null);
                 setOriginalDevices({ input: currentInput, output: currentOutput, volume: currentVolume });
-                setShowAudioPrompt(true);
+
+                // Auto-configure for perfect sync
+                await handleAutoSwitch(currentOutput);
                 return;
             }
         } catch (e) {
@@ -331,18 +340,38 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
         });
     };
 
-    const handleAutoSwitch = async () => {
+    const handleAutoSwitch = async (previousOutput?: string) => {
         try {
-            if (!selectedDevice?.toLowerCase().includes('driverless')) {
-                await invoke('set_system_volume', { volume: 100 }).catch(e => console.error("Volume failed", e));
-                await invoke('set_default_audio_device', { isInput: false, name: selectedDevice });
+            // 1. Set system output to BlackHole
+            await invoke('set_default_audio_device', { isInput: false, name: 'BlackHole 2ch' });
+
+            // 2. Set Resound monitor to the previous output (built-in speakers usually)
+            if (previousOutput) {
+                setMonitorDevice(previousOutput);
             }
-            // await invoke('set_default_audio_device', { isInput: false, name: 'resound audio' });
+
+            // 3. Set Resound input to BlackHole
+            setSelectedDevice('BlackHole 2ch');
+
+            // 4. Set volume to max for clean loopback
+            await invoke('set_system_volume', { volume: 100 }).catch(e => console.error("Volume failed", e));
+
+            // Small delay to let OS catch up
+            setTimeout(() => startActualHost(), 500);
         } catch (e) {
             console.error('Failed to auto switch', e);
+            startActualHost();
         }
-        setShowAudioPrompt(false);
-        setTimeout(() => startActualHost(), 500);
+    };
+
+    const handleDriverSetupComplete = async () => {
+        setShowDriverSetup(false);
+        const currentOutput = await invoke<string>('get_default_audio_device', { isInput: false });
+        const currentInput = await invoke<string>('get_default_audio_device', { isInput: true });
+        const currentVolume = await invoke<number>('get_system_volume').catch(() => null);
+
+        setOriginalDevices({ input: currentInput, output: currentOutput, volume: currentVolume });
+        await handleAutoSwitch(currentOutput);
     };
 
     const handleStop = async () => {
@@ -412,6 +441,15 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
                     >
                         <Power strokeWidth={2.5} size={32} />
                     </button>
+
+                    {originalDevices && (
+                        <button
+                            onClick={handleStop}
+                            className="text-xs text-zinc-500 hover:text-white transition-colors flex items-center gap-1.5 px-4 py-2 bg-white/5 rounded-full"
+                        >
+                            <span>↩️</span> Disable Perfect Sync
+                        </button>
+                    )}
                 </div>
             ) : (
                 <div className="flex flex-col items-center w-full py-6 space-y-6">
@@ -442,27 +480,11 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
                 </div>
             )}
 
-            {showAudioPrompt && (
-                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#141415]/90 backdrop-blur-md rounded-[32px] p-6 text-center animate-in fade-in duration-200">
-                    <div className="flex items-center justify-center w-12 h-12 mb-4 rounded-full bg-white/10">
-                        <Headphones className="text-white" size={24} />
-                    </div>
-                    <p className="mb-6 font-medium text-white">Resound needs to route your audio to share it</p>
-
-                    <button
-                        onClick={handleAutoSwitch}
-                        className="bg-white text-black px-6 py-3 rounded-xl font-medium shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:scale-105 active:scale-95 transition-transform flex items-center gap-2"
-                    >
-                        <span>👉</span> Switch Audio Automatically
-                    </button>
-
-                    <button
-                        onClick={() => setShowAudioPrompt(false)}
-                        className="mt-6 text-xs transition-colors text-zinc-500 hover:text-white"
-                    >
-                        Cancel
-                    </button>
-                </div>
+            {showDriverSetup && (
+                <DriverSetupFlow
+                    onClose={() => setShowDriverSetup(false)}
+                    onComplete={handleDriverSetupComplete}
+                />
             )}
         </motion.div>
     );

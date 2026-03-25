@@ -151,10 +151,12 @@ export class WebAudioController {
                 this.clockOffset = this.clockOffset * 0.8 + offset * 0.2;
               }
 
-              if (this.useWorklet && this.workletNode) {
+              if (this.useWorklet && this.workletNode && this.audioContext) {
                 this.workletNode.port.postMessage({
                   type: "sync-offset",
                   offset: this.clockOffset,
+                  baseTime:
+                    performance.now() - this.audioContext.currentTime * 1000,
                 });
               }
             } else if (msg.type === "host_disconnected") {

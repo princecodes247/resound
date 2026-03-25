@@ -12,6 +12,7 @@ class ResoundProcessor extends AudioWorkletProcessor {
   private resampleRatio = 1.0;
   private fractionalIndex = 0;
   private clockOffset = 0;
+  private baseTime = 0;
   private lastPacketTimestamp = 0;
   private samplesSinceLastPacket = 0;
   private isFirstPacket = true;
@@ -40,6 +41,7 @@ class ResoundProcessor extends AudioWorkletProcessor {
         this.pushData(payload, timestamp);
       } else if (type === "sync-offset") {
         this.clockOffset = offset;
+        if (baseTime) this.baseTime = baseTime;
       }
     };
   }
@@ -81,28 +83,39 @@ class ResoundProcessor extends AudioWorkletProcessor {
     const numFrames = output[0].length;
 
     // High-precision clock sync logic
-    // We want to play the sample whose scheduled host time matches (currentTime * 1000 + clockOffset)
-    const hostNow = currentTime * 1000 + this.clockOffset;
+    // hostNow is the current time in the host's timeline
+    const hostNow = currentTime * 1000 + this.baseTime + this.clockOffset;
 
     let driftAdjustment = 1.0;
     if (this.lastPacketTimestamp > 0 && this.samplesAvailable > 0) {
-      // targetBuffer is 150ms (the delay we added on the host)
-      // The timestamp in the packet IS the playout time.
-      // So at hostNow == packet_timestamp, we should be playing the FIRST sample of that packet.
-
+      // The timestamp in the packet IS the intended playout time.
       const currentBufferMs =
         ((this.samplesAvailable / this.inputChannels) * 1000) / sampleRate;
-      const headHostTime = this.lastPacketTimestamp; // Time of the latest sample pushed
-      const tailHostTime = headHostTime - currentBufferMs; // Time of the sample at readIndex
+      const tailHostTime = this.lastPacketTimestamp - currentBufferMs;
 
+      // Error is how far away we are from the "correct" sample.
       const error = tailHostTime - hostNow;
 
-      // P-controller for sync
-      // If error > 0, we are late (playing samples that should have been played earlier) -> speed up
-      // If error < 0, we are early -> slow down
-      // Target error is 0.
+      if (error > 20) {
+        // Too early! Output silence instead of playing.
+        for (let i = 0; i < numFrames; i++) {
+          for (let oc = 0; oc < numOutputChannels; oc++) {
+            output[oc][i] = 0;
+          }
+        }
+        return true;
+      }
+
+      if (error < -500) {
+        // Too late! Jump forward
+        this.samplesAvailable = 0;
+        this.isFirstPacket = true;
+        return true;
+      }
+
+      // P-controller for sub-millisecond sync
       driftAdjustment = 1.0 + (error / 150.0) * 0.1; // 10% max adjustment
-      driftAdjustment = Math.max(0.95, Math.min(1.05, driftAdjustment));
+      driftAdjustment = Math.max(0.98, Math.min(1.02, driftAdjustment));
     }
 
     const effectiveRatio = this.resampleRatio * driftAdjustment;

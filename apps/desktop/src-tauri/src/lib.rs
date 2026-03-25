@@ -741,6 +741,14 @@ pub async fn start_native_receiver(
     let ws_url = format!("ws://{host_ip}:{host_port}{WS_PATH}");
     let (ws_stream, _) = tokio_tungstenite::client_async(ws_url, tcp_stream).await.map_err(|e| e.to_string())?;
     let (mut write, mut read) = ws_stream.split();
+    let (tx_ws, mut rx_ws) = tokio::sync::mpsc::unbounded_channel::<TMessage>();
+
+    // WebSocket sender task
+    tokio::spawn(async move {
+        while let Some(msg) = rx_ws.recv().await {
+            if write.send(msg).await.is_err() { break; }
+        }
+    });
 
     // 1) Register as receiver
     let reg = serde_json::json!({
@@ -749,7 +757,7 @@ pub async fn start_native_receiver(
         "sessionId": session_id,
         "clientId": "native-rust-receiver",
     });
-    write.send(TMessage::Text(reg.to_string())).await.map_err(|e| e.to_string())?;
+    tx_ws.send(TMessage::Text(reg.to_string())).map_err(|e| e.to_string())?;
 
     let host = cpal::default_host();
     let device = host.default_output_device().ok_or("No default output device found")?;
@@ -759,8 +767,26 @@ pub async fn start_native_receiver(
 
     log::info!("Native receiver started: {} ({}Hz, {}ch)", device.name().unwrap_or_default(), sample_rate, channels);
     
-    let playback_buf = Arc::new(Mutex::new(VecDeque::<f32>::new()));
+    let playback_buf = Arc::new(Mutex::new(VecDeque::<(u64, Vec<f32>)>::new()));
     let playback_buf_clone = playback_buf.clone();
+    let clock_offset = Arc::new(Mutex::new(0i64));
+    let clock_offset_reader = clock_offset.clone();
+    let clock_offset_writer = clock_offset.clone();
+    let start_instant = std::time::Instant::now();
+    let start_instant_clone = start_instant.clone();
+
+    // Periodically sync clock with host
+    let tx_ws_sync = tx_ws.clone();
+    tokio::spawn(async move {
+        loop {
+            let req = serde_json::json!({
+              "type": "sync_request",
+              "t0": start_instant_clone.elapsed().as_millis() as u64
+            });
+            if tx_ws_sync.send(TMessage::Text(req.to_string())).is_err() { break; }
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+    });
 
     // High-performance playback task
     tokio::spawn(async move {
@@ -776,10 +802,26 @@ pub async fn start_native_receiver(
             let data = match msg {
                 Ok(TMessage::Binary(d)) => d,
                 Ok(TMessage::Text(t)) => {
-                    if t.contains("host_disconnected") {
-                        log::info!("Host disconnected explicitly.");
-                        explicit_disconnect = true;
-                        break;
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&t) {
+                        if v["type"] == "sync_response" {
+                            let t0 = v["t0"].as_u64().unwrap_or(0);
+                            let t1 = v["t1"].as_u64().unwrap_or(0);
+                            let t2 = v["t2"].as_u64().unwrap_or(0);
+                            let now = start_instant.elapsed().as_millis() as u64;
+                            let offset = (t1 as i64 - t0 as i64 + (t2 as i64 - now as i64)) / 2;
+                            
+                            let mut guard = clock_offset_writer.lock().unwrap();
+                            if *guard == 0 {
+                                *guard = offset;
+                            } else {
+                                // Smooth adjustment
+                                *guard = (*guard * 8 + offset * 2) / 10;
+                            }
+                        } else if v["type"] == "host_disconnected" {
+                            log::info!("Host disconnected explicitly.");
+                            explicit_disconnect = true;
+                            break;
+                        }
                     }
                     continue;
                 }
@@ -832,43 +874,11 @@ pub async fn start_native_receiver(
 
             {
                 let mut buf = playback_buf.lock().unwrap();
+                buf.push_back((host_time_ms, resampled_samples.clone()));
                 
-                // // Normalization per packet
-                // let max = resampled_samples.iter().fold(0.0f32, |a, &b| a.max(b.abs()));
-                // if max > 0.02 {
-                //     let norm = (1.0 / max).min(2.0); // Safety cap: max 2x boost from normalization
-                //     buf.extend(resampled_samples.iter().map(|s| s * norm));
-                // } else {
-                //     buf.extend(resampled_samples.iter().copied());
-                // }
-
-                buf.extend(resampled_samples.iter().copied());
-
-                // Smooth jitter buffer: drain frame-by-frame
-                let delay_samples = (sample_rate as f64 * channels as f64 * TARGET_DELAY_MS as f64 / 1000.0) as usize;
-                let _max_buffer = delay_samples + (sample_rate as usize * channels / 10); // +100ms
-                let target = delay_samples;
-                let tolerance = sample_rate as usize * channels / 50; // ~20ms
-
-                if buf.len() > target + (sample_rate as usize * channels / 4) {
-                    // Harsh lag (>250ms), drain instantly to target
-                    let to_remove = buf.len() - target;
-                    buf.drain(0..to_remove);
-                    log::warn!("Aggressively drained {} samples to reduce lag", to_remove);
-                } else if buf.len() > target + tolerance {
-                    // Proportional catch-up: drop more frames if lag is higher
-                    let extra_samples = buf.len() - target;
-                    let to_drop_frames = (extra_samples / (sample_rate as usize * channels / 100)).max(1);
-                    for _ in 0..to_drop_frames * channels {
-                        buf.pop_front();
-                    }
-                } else if buf.len() < target - tolerance {
-                    // gently slow down playback
-                    if let Some(last) = buf.front().copied() {
-                        for _ in 0..channels {
-                            buf.push_front(last); // duplicate 1 frame
-                        }
-                    }
+                // Keep buffer manageable (max 2 seconds)
+                if buf.len() > 200 {
+                    buf.pop_front();
                 }
             }
         }
@@ -879,43 +889,55 @@ pub async fn start_native_receiver(
         }
     });
 
-    let mut started = false;
+    let mut current_packet: Option<(u64, Vec<f32>)> = None;
+    let mut packet_pos = 0;
+
     let stream = device.build_output_stream(
         &config.into(),
         move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-            let mut buf = playback_buf_clone.lock().unwrap();
-            let delay_samples = (sample_rate as f64 * channels as f64 * TARGET_DELAY_MS as f64 / 1000.0) as usize;
+            let offset = *clock_offset_reader.lock().unwrap();
+            let host_now = (start_instant.elapsed().as_millis() as i64 + offset) as u64;
 
-            if !started {
-                if buf.len() < delay_samples * 2 {
-                    for x in data.iter_mut() { *x = 0.0; }
-                    return;
+            for frame in data.chunks_mut(channels) {
+                if current_packet.is_none() {
+                    let mut buf = playback_buf_clone.lock().unwrap();
+                    if let Some(pkg) = buf.pop_front() {
+                        // Check if it's too early
+                        if host_now < pkg.0 {
+                            // Don't pop yet, just output silence for this frame
+                            buf.push_front(pkg);
+                        } else if host_now > pkg.0 + 500 {
+                            // Too late (>500ms), drop it
+                            continue;
+                        } else {
+                            current_packet = Some(pkg);
+                            packet_pos = 0;
+                        }
+                    }
                 }
-                started = true;
-            }
 
-            if host_channels as usize == channels {
-                for x in data.iter_mut() {
-                    let s = buf.pop_front().unwrap_or(0.0) * output_gain;
-                    *x = s.clamp(-1.0, 1.0);
-                }
-            } else if host_channels == 1 && channels == 2 {
-                // Mono to Stereo: duplicate samples
-                for frame in data.chunks_exact_mut(2) {
-                    let s = buf.pop_front().unwrap_or(0.0) * output_gain;
-                    let s = s.clamp(-1.0, 1.0);
-                    frame[0] = s;
-                    frame[1] = s;
-                }
-            } else {
-                // Fallback for other mismatches
-                for x in data.iter_mut() {
-                    let s = buf.pop_front().unwrap_or(0.0) * output_gain;
-                    *x = s.clamp(-1.0, 1.0);
+                if let Some(ref mut pkg) = current_packet {
+                    for (c, sample) in frame.iter_mut().enumerate() {
+                        // Resampled samples already contain host_channels channels.
+                        // We map them to the output device's channels.
+                        let host_ch = host_channels as usize;
+                        let idx = packet_pos * host_ch + (if pkg.1.len() > host_ch { c % host_ch } else { 0 });
+                        if idx < pkg.1.len() {
+                            *sample = pkg.1[idx] * output_gain;
+                        } else {
+                            *sample = 0.0;
+                        }
+                    }
+                    packet_pos += 1;
+                    if packet_pos * (host_channels as usize) >= pkg.1.len() {
+                        current_packet = None;
+                    }
+                } else {
+                    for sample in frame.iter_mut() { *sample = 0.0; }
                 }
             }
         },
-        |err| log::error!("Playback error: {err}"),
+        move |err| { log::error!("Playback error: {err}"); },
         None,
     ).map_err(|e| e.to_string())?;
 

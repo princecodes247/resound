@@ -65,7 +65,7 @@ export default function App() {
     // Settings State
     const [showSettings, setShowSettings] = useState(false);
     const [broadcastName, setBroadcastName] = useState('');
-    const [selectedDevice, setSelectedDevice] = useState('');
+    const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
     const [localIp, setLocalIp] = useState<string | null>(null);
 
     useEffect(() => {
@@ -79,20 +79,20 @@ export default function App() {
             .then(id => setBroadcastName(getDeterministicName(id)))
             .catch(() => setBroadcastName(generateBroadcastName()));
     }, []);
-    const [monitorDevice, setMonitorDevice] = useState('');
+    const [monitorDevice, setMonitorDevice] = useState<string | null>(null);
     const [monitorGain, setMonitorGain] = useState(1.0);
     const [broadcastGain, setBroadcastGain] = useState(1.0);
     const [outputGain, setOutputGain] = useState(1.0);
 
     // Auto-select "Resound Audio" for monitor device and blackhole for input device if available
     useEffect(() => {
-        if (!monitorDevice && host.outputDevices?.length > 0) {
+        if (monitorDevice === null && host.outputDevices?.length > 0) {
             const resoundAudio = host.outputDevices.find((d: any) => d.name.toLowerCase().includes('resound audio'));
             if (resoundAudio) {
                 setMonitorDevice(resoundAudio.name);
             }
         }
-        if (host.devices?.length > 0) {
+        if (selectedDevice === null && host.devices?.length > 0) {
             const blackhole = host.devices.find((d: any) => d.name.toLowerCase().includes('blackhole'));
             if (blackhole) {
                 setSelectedDevice(blackhole.name);
@@ -240,7 +240,7 @@ export default function App() {
                                     <label className="block mb-2 text-xs font-semibold tracking-wider uppercase text-zinc-500">Local Monitor Output</label>
                                     <div className="relative">
                                         <select
-                                            value={monitorDevice}
+                                            value={monitorDevice ?? ''}
                                             onChange={(e) => setMonitorDevice(e.target.value)}
                                             className="w-full px-4 py-3 text-sm text-white transition-colors border appearance-none cursor-pointer bg-zinc-900/50 border-white/10 rounded-xl focus:outline-none focus:border-white/30"
                                         >
@@ -323,7 +323,7 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
         host.startHost({
             deviceName: selectedDevice || null,
             name: broadcastName || null,
-            monitor: monitorDevice !== '',
+            monitor: !!monitorDevice,
             monitorDevice: monitorDevice || null,
             monitorSkipChannels: 0,
             monitorGain,
@@ -384,7 +384,7 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
                         <label className="block px-2 mb-3 text-xs font-semibold tracking-wider uppercase text-zinc-500">Input Source</label>
                         <div className="relative">
                             <select
-                                value={selectedDevice}
+                                value={selectedDevice ?? ''}
                                 onChange={(e) => setSelectedDevice(e.target.value)}
                                 className="w-full px-5 py-4 text-sm text-white transition-colors border appearance-none cursor-pointer bg-zinc-900/50 border-white/10 rounded-2xl focus:outline-none focus:border-white/30"
                             >

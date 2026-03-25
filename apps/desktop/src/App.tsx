@@ -84,15 +84,21 @@ export default function App() {
     const [broadcastGain, setBroadcastGain] = useState(1.0);
     const [outputGain, setOutputGain] = useState(1.0);
 
-    // Auto-select "Resound Audio" for monitor device if available
+    // Auto-select "Resound Audio" for monitor device and blackhole for input device if available
     useEffect(() => {
         if (!monitorDevice && host.outputDevices?.length > 0) {
-            const testDev = host.outputDevices.find((d: any) => d.name.toLowerCase().includes('resound audio'));
-            if (testDev) {
-                setMonitorDevice(testDev.name);
+            const resoundAudio = host.outputDevices.find((d: any) => d.name.toLowerCase().includes('resound audio'));
+            if (resoundAudio) {
+                setMonitorDevice(resoundAudio.name);
             }
         }
-    }, [host.outputDevices]);
+        if (host.devices?.length > 0) {
+            const blackhole = host.devices.find((d: any) => d.name.toLowerCase().includes('blackhole'));
+            if (blackhole) {
+                setSelectedDevice(blackhole.name);
+            }
+        }
+    }, [host.outputDevices, host.devices]);
 
     // Prevent mode switching if mid-operation
     const isBroadcasting = host.status === 'broadcasting' || host.status === 'starting';
@@ -298,9 +304,9 @@ function BroadcastView({ host, broadcastName, setBroadcastName, selectedDevice, 
             const currentOutput = await invoke<string>('get_default_audio_device', { isInput: false });
 
             const isBlackHole = currentInput.toLowerCase().includes('blackhole');
-            const isTestDev = currentOutput.toLowerCase().includes('resound audio');
+            const isResoundAudio = currentOutput.toLowerCase().includes('resound audio');
 
-            if (!isBlackHole || !isTestDev) {
+            if (!isBlackHole || !isResoundAudio) {
                 const currentVolume = await invoke<number>('get_system_volume').catch(() => null);
                 setOriginalDevices({ input: currentInput, output: currentOutput, volume: currentVolume });
                 setShowAudioPrompt(true);

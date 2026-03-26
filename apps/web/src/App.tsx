@@ -53,16 +53,9 @@ export default function App() {
     }
   }, [isListening]);
 
-  const scrollToApp = () => {
-    appSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   return (
-    <div className="min-h-[200vh] bg-[#0A0A0B] text-white flex flex-col items-center font-sans selection:bg-accent/30 relative w-full overflow-x-hidden bg-mesh bg-grain">
+    <div className=" bg-[#0A0A0B] text-white flex flex-col items-center font-sans selection:bg-accent/30 relative w-full overflow-x-hidden bg-mesh bg-grain">
       <CosmicBackground />
-
-
-      <HeroSection onScrollToApp={scrollToApp} />
 
       {/* App Section */}
       <section
@@ -70,7 +63,7 @@ export default function App() {
         className="relative z-10 flex flex-col items-center w-full min-h-screen px-6 pt-20 pb-40 -mt-28"
       >
         <div className="w-full max-w-xl">
-          <div className="mb-12 text-center">
+          <div className="my-12 text-center">
             <h2 className="mb-2 text-3xl font-bold tracking-tight text-white">Connect to Host</h2>
             <p className="text-zinc-400">Join a local broadcast from any device</p>
           </div>
@@ -147,11 +140,6 @@ export default function App() {
           )}
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="relative z-10 flex flex-col items-center w-full py-12 bg-black border-t border-white/5">
-        <p className="text-sm text-zinc-500">© 2024 Resound. Built for the audiophiles.</p>
-      </footer>
     </div>
   );
 }

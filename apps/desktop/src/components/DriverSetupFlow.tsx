@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Headphones, CheckCircle2, AlertCircle, Loader2, X, ChevronRight } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, X, ChevronRight } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 
 interface DriverSetupFlowProps {

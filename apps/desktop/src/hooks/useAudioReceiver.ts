@@ -7,7 +7,7 @@ const isTauri = !!(window as any).__TAURI_INTERNALS__;
 
 export const useAudioReceiver = () => {
   const [status, setStatus] = useState<
-    "idle" | "discovering" | "connecting" | "receiving" | "error"
+    "idle" | "discovering" | "connecting" | "receiving" | "error" | "disconnected"
   >("idle");
   const [hosts, setHosts] = useState<DiscoveredHost[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);

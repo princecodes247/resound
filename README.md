@@ -1,101 +1,76 @@
-# Resound - LAN Audio Streaming
+# Resound — Ultra-Low Latency LAN Audio
 
-A cross-platform audio streaming application built with **Tauri** (Rust + React/TypeScript). Resound captures system audio on a **Host** device and streams it to multiple **Receiver** devices over your local area network (LAN) using **WebRTC (Opus)** for low-latency delivery.
+Resound is a premium, high-fidelity audio streaming system built with **Rust (Tauri)** and **TypeScript (Next.js)**. It captures system audio on a **Host** and streams it with sample-aligned synchronization to multiple **Receivers** over a local network.
 
-## Key Features
+## 🚀 Key Features
 
-- **Real-time Audio Streaming**: Ultra-low-latency streaming over LAN.
-- **Easy Discovery**: Receivers automatically find the Host via mDNS.
-- **System Audio Capture**: Transmits your system's audio output (e.g., music, browser audio) to receivers.
-- **Adjustable Controls**: Output gain/boost controls for the monitor and remote receivers.
-- **Cross-Platform**: Built with Tauri for native performance on macOS (Windows and Linux support planned).
-- **Tray Menu Integration**: Quick access to sharing and joining a broadcast via a dedicated menu bar tray.
+- **Sample-Aligned Sync**: Perfect audio alignment across multiple devices using a fixed 150ms playout delay.
+- **Dual-Mode Capture (macOS)**:
+  - **Perfect Sync**: High-fidelity loopback via the Resound Audio aggregate driver (powered by BlackHole).
+  - **Lightweight Sync (Driverless)**: Zero-configuration capture using `ScreenCaptureKit`.
+- **mDNS Auto-Discovery**: Receivers instantly find hosts on the LAN without IP configuration.
+- **Premium Web Client**: A mobile-responsive Next.js interface for quick, driverless receiving.
+- **Live Status Feedback**: Real-time connection monitoring and "On Air" feedback.
+- **Advanced Controls**: Per-client gain boost (1x to 3x) and multi-channel hardware monitoring.
 
-## Architecture
+## 🏗️ Technical Architecture
 
-Resound consists of a **Tauri** application with a unified Rust backend and a lightweight React/TypeScript frontend.
+Resound is a modern mono-repo designed for performance and scale:
 
-### Backend (Rust)
-- **Tauri**: Provides the desktop application framework, native windowing, and tray integration.
-- **Axum**: Runs an internal WebSocket server for WebRTC signaling (offers, answers, ICE candidates).
-- **mDNS (mdns-sd)**: Handles service discovery, advertising the Host's signaling server as `_resound-audio._tcp.local.`.
-- **System Audio Capture (macOS Focus)**: Uses `coreaudio` to capture output from a specific aggregate device.
+- **Desktop (`apps/desktop`)**: A Tauri v2 application (Rust/React) providing high-priority native audio capture and playback.
+- **Web (`apps/web`)**: A Next.js receiver that uses the Web Audio API for browser-based playback.
+- **Landing (`apps/landing`)**: A Next.js 15 + Tailwind 4 landing page with a modern "unearthly" aesthetic.
+- **Backend (Rust)**:
+  - **Axum**: Powers the WebSocket signaling and binary audio distribution server.
+  - **CPAL**: Manages native cross-platform audio streams.
+  - **mdns-sd**: Handles local network service advertisement and browsing.
 
-### Frontend (React + TypeScript + Tailwind)
-- Handled by Vite and built to the `dist/` directory.
-- Captures system and mic audio via native WebRTC peer connections using the signaling relay provided by the Rust backend.
-- Provides a clean, dynamic, and modern interface for Host controls (boost adjustments) and Receiver management.
+For an in-depth dive into the internals, see [Implementation Details](implementation.md) and [Resound Shorts](shorts.md).
 
-## Prerequisites
+## 🛠️ Prerequisites
 
-- **Rust**: [Install Rust](https://www.rust-lang.org/tools/install) (latest stable).
-- **Node.js / npm**: Required for running the frontend and Tauri CLI.
-- **System Dependencies**: See the [Tauri setup guide](https://tauri.app/start/prerequisites/) for your operating system.
-- **macOS Audio Setup**: Since Resound natively captures system audio on macOS via loopback, you must manually create an **Aggregate Device**. (See details below).
+- **Rust**: Latest stable toolchain.
+- **Node.js**: LTS version (v20+ recommended).
+- **macOS Requirements**:
+  - [BlackHole 2ch](https://existential.audio/blackhole/) for "Perfect Sync" mode.
+  - Resound automatically attempts to create and manage the **`Resound Audio`** aggregate device.
 
-### System Audio Capture Requirements (macOS)
-To broadcast system audio on macOS natively, Resound requires a virtual audio loopback device like **BlackHole** and a manually created **Aggregate Device** named `resound audio`.
+## 🚦 Getting Started
 
-1. **Install BlackHole**:
-   - Download and install [BlackHole 2ch](https://existential.audio/blackhole/). (Or install via Homebrew: `brew install blackhole-2ch`).
+### Installation & Development
 
-2. **Create the Aggregate Device**:
-   - Open **Audio MIDI Setup** (located in `/System/Applications/Utilities/`).
-   - Click the **+** button in the bottom left corner and select **Create Aggregate Device**.
-   - Double-click the newly created device name and rename it exactly to **`resound audio`**.
-   - In the subdevice list on the right, check the box for your **Default Output Device** (e.g., *MacBook Pro Speakers* or *External Headphones*).
-   - Check the box for **BlackHole 2ch**.
-   - Ensure the "Clock Source" (Master) is set to your primary output device, and enable **Drift Correction** for BlackHole.
-
-*Note: Once created, Resound will look for the `resound audio` aggregate device and BlackHole respectively to properly capture and monitor audio without feedback loops. If this is missing, initialization may fail or system audio capture will not work.*
-
-## Getting Started
-
-### Installation
-
-1.  Clone the repository:
-    ```bash
-    git clone <repository-url>
-    cd resound
-    ```
-
-2.  Install the NPM dependencies:
-    ```bash
-    npm install
-    ```
-
-### Development Mode
-
-Run the following command to start both the Vite development server and the Tauri application automatically:
 ```bash
+# Clone the repo
+git clone https://github.com/princecodes247/resound.git
+
+# Install dependencies
+npm install
+
+# Start the full stack (Desktop + Landing + Web)
 npm run dev
-# Or start via cargo directly: `cargo tauri dev`
 ```
 
 ### Building for Production
 
-To create a production build (optimized binary and bundle):
 ```bash
-npm run build
-# Then build Tauri: `cargo tauri build`
+# Production build for the desktop client
+npm run build:desktop
 ```
-The output will be located in `src-tauri/target/release/bundle/`.
 
-## Usage
+## 🎧 Usage
 
-### As a Host
-1. Set your system output device to the **`resound audio`** aggregate device.
-2. Launch the application.
-3. Click **"Start Host"**.
-4. Grant permissions if prompted. 
-5. The system audio playing to your `resound audio` stream will automatically broadcast to connected receivers.
-6. You can adjust the stream and local monitor boost/gain in the Host dashboard.
+### Broadcasting (Host)
 
-### As a Receiver
-1. Launch the application on another device connected to the same LAN.
-2. Click **"Discover Hosts"** to populate the list via mDNS.
-3. Select the desired host from the dropdown.
-4. Click **"Connect & Play"**.
+1. Launch the Desktop app and select **"Broadcast"** mode.
+2. Choose your **Sync Mode** (Perfect or Lightweight).
+3. Tap the **Power** button to go "On Air".
+4. Share the provided QR code or Session ID with listeners.
+
+### Listening (Receiver)
+
+1. Open the [Web Client](https://resound.live) or another Desktop instance.
+2. The host will appear automatically in the **"Available Broadcasts"** list.
+3. Tap **"Connect"** to start the synchronized audio stream.
 
 ---
-*Note: This project is an MVP and requires both devices to be on the same local network for mDNS discovery and WebRTC streaming.*
+*Built with ❤️ by the Resound team. Designed for musicians, gamers, and audiophiles.*

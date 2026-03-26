@@ -39,7 +39,7 @@ export const Hero = () => {
                     className="flex flex-col items-center justify-center gap-4 mb-16 sm:flex-row"
                 >
                     <button className="flex items-center gap-3 px-8 py-4 text-lg font-semibold transition-all border rounded-full glass-prism text-stellar-white hover:bg-white/10 border-white/20">
-                        {/* <Download className="w-5 h-5" /> */}
+                        <Download className="w-5 h-5" />
                         Get Desktop App
                     </button>
                 </motion.div>

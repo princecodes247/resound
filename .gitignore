@@ -15,6 +15,7 @@ dist-ssr
 .cargo
 .npm-cache
 .vite
+.next
 
 # Editor directories and files
 .vscode/*

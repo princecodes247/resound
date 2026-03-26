@@ -1,0 +1,233 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cosmic-bg: #030305;
+  --color-cosmic-surface: #0a0a0f;
+  --color-cosmic-card: #111118;
+  --color-cosmic-border: #1a1a25;
+  --color-cosmic-glow: #7c3aed;
+
+  --color-aurora-cyan: #06b6d4;
+  --color-aurora-purple: #8b5cf6;
+  --color-aurora-pink: #ec4899;
+  --color-aurora-blue: #3b82f6;
+
+  --color-stellar-white: #fafafa;
+  --color-stellar-silver: #a1a1aa;
+  --color-stellar-dim: #52525b;
+
+  --color-accent: #7c3aed;
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-glow: glow 2s ease-in-out infinite alternate;
+  --animate-spin-slow: spin 12s linear infinite;
+  --animate-breathe: breathe 8s ease-in-out infinite;
+  --animate-fade-in-up: fade-in-up 0.8s ease-out forwards;
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-20px);
+    }
+  }
+
+  @keyframes glow {
+    0% {
+      opacity: 0.4;
+      transform: scale(1);
+    }
+    100% {
+      opacity: 0.8;
+      transform: scale(1.1);
+    }
+  }
+
+  @keyframes breathe {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 0.8;
+    }
+    50% {
+      transform: scale(1.05);
+      opacity: 1;
+    }
+  }
+
+  @keyframes fade-in-up {
+    0% {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  --background-image-gradient-radial: radial-gradient(var(--tw-gradient-stops));
+  --background-image-aurora-gradient: linear-gradient(
+    135deg,
+    #06b6d4 0%,
+    #8b5cf6 50%,
+    #ec4899 100%
+  );
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--color-cosmic-bg);
+    color: var(--color-stellar-white);
+    overflow-x: hidden;
+  }
+}
+
+@layer components {
+  .cosmic-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: radial-gradient(
+        ellipse at 20% 20%,
+        rgba(var(--color-aurora-purple), 0.15) 0%,
+        transparent 50%
+      ),
+      radial-gradient(
+        ellipse at 80% 80%,
+        rgba(var(--color-aurora-cyan), 0.1) 0%,
+        transparent 50%
+      ),
+      radial-gradient(
+        ellipse at 50% 50%,
+        rgba(var(--color-aurora-pink), 0.05) 0%,
+        transparent 70%
+      ),
+      linear-gradient(180deg, #030305 0%, #0a0a0f 50%, #030305 100%);
+  }
+
+  .starfield {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    opacity: 0.6;
+    background-image: radial-gradient(
+        2px 2px at 20px 30px,
+        rgba(255, 255, 255, 0.8),
+        transparent
+      ),
+      radial-gradient(
+        2px 2px at 40px 70px,
+        rgba(255, 255, 255, 0.6),
+        transparent
+      ),
+      radial-gradient(
+        1px 1px at 90px 40px,
+        rgba(255, 255, 255, 0.9),
+        transparent
+      ),
+      radial-gradient(
+        2px 2px at 160px 120px,
+        rgba(255, 255, 255, 0.5),
+        transparent
+      ),
+      radial-gradient(
+        1px 1px at 230px 180px,
+        rgba(255, 255, 255, 0.7),
+        transparent
+      ),
+      radial-gradient(
+        2px 2px at 300px 80px,
+        rgba(255, 255, 255, 0.6),
+        transparent
+      ),
+      radial-gradient(
+        1px 1px at 400px 200px,
+        rgba(255, 255, 255, 0.8),
+        transparent
+      );
+    background-size: 800px 400px;
+    animation: twinkle 8s ease-in-out infinite;
+  }
+
+  @keyframes twinkle {
+    0%,
+    100% {
+      opacity: 0.5;
+    }
+    50% {
+      opacity: 0.8;
+    }
+  }
+
+  .glass-prism {
+    background: rgba(17, 17, 24, 0.6);
+    backdrop-filter: blur(24px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  .aurora-btn {
+    position: relative;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--color-aurora-cyan), 0.9),
+      rgba(var(--color-aurora-purple), 0.9)
+    );
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .aurora-btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--color-aurora-pink), 0.9),
+      rgba(var(--color-aurora-cyan), 0.9)
+    );
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .aurora-btn:hover::before {
+    opacity: 1;
+  }
+
+  .aurora-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 40px -10px rgba(var(--color-aurora-purple), 0.5);
+  }
+}
+
+@layer utilities {
+  .animation-delay-1000 {
+    animation-delay: 1s;
+  }
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+  .bg-mesh {
+    background-image: radial-gradient(
+        at 0% 0%,
+        rgba(var(--color-aurora-cyan), 0.15) 0,
+        transparent 50%
+      ),
+      radial-gradient(
+        at 100% 0%,
+        rgba(var(--color-aurora-purple), 0.15) 0,
+        transparent 50%
+      );
+  }
+}
+

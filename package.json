@@ -8,8 +8,10 @@
   "scripts": {
     "dev": "cd apps/desktop && cargo tauri dev",
     "dev:landing": "npm run dev -w @resound/landing",
-    "sync-web": "npm run build -w web && mkdir -p apps/desktop/src-tauri/web_dist && rm -rf apps/desktop/src-tauri/web_dist/* && cp -rv apps/web/dist/* apps/desktop/src-tauri/web_dist/",
-    "build": "npm run sync-web && npm run build -w @resound/desktop && cd apps/desktop && npm run tauri build",
+    "build:web": "npm run build -w web",
+    "sync-web": "npm run build:web && mkdir -p apps/desktop/src-tauri/web_dist && rm -rf apps/desktop/src-tauri/web_dist/* && cp -rv apps/web/dist/* apps/desktop/src-tauri/web_dist/",
+    "build:desktop": "npm run sync-web && npm run build -w @resound/desktop && cd apps/desktop && npm run tauri build",
+    "build": "npm run build:desktop",
     "build:landing": "npm run build -w @resound/landing"
   },
   "devDependencies": {

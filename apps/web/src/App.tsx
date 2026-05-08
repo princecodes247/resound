@@ -306,20 +306,20 @@ const ListenView = memo(({ receiver }: ListenViewProps) => {
   );
 });
 
-// Icons
-const SignalIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
-    <path d="M12 20a8 8 0 1 1 0-16 8 8 0 0 1 0 16z" />
-    <path d="M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" opacity="0.5" />
-    <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-  </svg>
-);
+// // Icons
+// const SignalIcon = ({ className }: { className?: string }) => (
+//   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+//     <path d="M12 20a8 8 0 1 1 0-16 8 8 0 0 1 0 16z" />
+//     <path d="M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" opacity="0.5" />
+//     <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+//   </svg>
+// );
 
-const DownloadIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-  </svg>
-);
+// const DownloadIcon = ({ className }: { className?: string }) => (
+//   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={className}>
+//     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+//   </svg>
+// );
 
 // Animated Background
 const CosmicBackground = memo(() => (
@@ -334,60 +334,60 @@ const CosmicBackground = memo(() => (
   </div>
 ));
 
-const HeroSection = ({ onScrollToApp }: { onScrollToApp: () => void }) => {
-  return (
-    <section className="relative flex flex-col items-center justify-center min-h-screen px-6 overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute w-2 h-2 rounded-full top-1/4 left-1/4 bg-aurora-cyan/50 animate-pulse" />
-        <div className="absolute w-1 h-1 rounded-full top-1/3 right-1/3 bg-aurora-purple/50 animate-pulse animation-delay-1000" />
-        <div className="absolute bottom-1/3 left-1/3 w-1.5 h-1.5 rounded-full bg-aurora-pink/50 animate-pulse animation-delay-2000" />
-      </div>
+// const HeroSection = ({ onScrollToApp }: { onScrollToApp: () => void }) => {
+//   return (
+//     <section className="relative flex flex-col items-center justify-center min-h-screen px-6 overflow-hidden">
+//       <div className="absolute inset-0 pointer-events-none">
+//         <div className="absolute w-2 h-2 rounded-full top-1/4 left-1/4 bg-aurora-cyan/50 animate-pulse" />
+//         <div className="absolute w-1 h-1 rounded-full top-1/3 right-1/3 bg-aurora-purple/50 animate-pulse animation-delay-1000" />
+//         <div className="absolute bottom-1/3 left-1/3 w-1.5 h-1.5 rounded-full bg-aurora-pink/50 animate-pulse animation-delay-2000" />
+//       </div>
 
-      <div className="relative z-10 max-w-5xl mx-auto text-center">
-        <h1 className="mb-6 text-6xl font-bold tracking-tight md:text-8xl lg:text-9xl font-display animate-fade-in-up">
-          <span className="text-white">Resound</span>
-        </h1>
+//       <div className="relative z-10 max-w-5xl mx-auto text-center">
+//         <h1 className="mb-6 text-6xl font-bold tracking-tight md:text-8xl lg:text-9xl font-display animate-fade-in-up">
+//           <span className="text-white">Resound</span>
+//         </h1>
 
-        <p className="max-w-2xl mx-auto mb-12 text-xl leading-relaxed md:text-2xl text-stellar-silver animate-fade-in-up animation-delay-200">
-          Stream audio across your local network with
-          <span className="text-stellar-white"> studio-grade fidelity</span>
-        </p>
+//         <p className="max-w-2xl mx-auto mb-12 text-xl leading-relaxed md:text-2xl text-stellar-silver animate-fade-in-up animation-delay-200">
+//           Stream audio across your local network with
+//           <span className="text-stellar-white"> studio-grade fidelity</span>
+//         </p>
 
-        <div className="flex flex-col items-center justify-center gap-4 mb-16 sm:flex-row animate-fade-in-up animation-delay-300">
-          <button
-            onClick={onScrollToApp}
-            className="flex items-center gap-3 px-8 py-4 text-lg font-semibold text-white rounded-full aurora-btn"
-          >
-            <SignalIcon className="relative z-10 w-5 h-5" />
-            <span className="relative z-10">Connect to Host</span>
-          </button>
-          <a
-            href="#download"
-            className="flex items-center gap-3 px-8 py-4 text-lg font-semibold transition-all border rounded-full glass-prism text-stellar-white hover:bg-white/10 border-white/20"
-          >
-            <DownloadIcon className="w-5 h-5" />
-            Get Desktop App
-          </a>
-        </div>
+//         <div className="flex flex-col items-center justify-center gap-4 mb-16 sm:flex-row animate-fade-in-up animation-delay-300">
+//           <button
+//             onClick={onScrollToApp}
+//             className="flex items-center gap-3 px-8 py-4 text-lg font-semibold text-white rounded-full aurora-btn"
+//           >
+//             <SignalIcon className="relative z-10 w-5 h-5" />
+//             <span className="relative z-10">Connect to Host</span>
+//           </button>
+//           <a
+//             href="#download"
+//             className="flex items-center gap-3 px-8 py-4 text-lg font-semibold transition-all border rounded-full glass-prism text-stellar-white hover:bg-white/10 border-white/20"
+//           >
+//             <DownloadIcon className="w-5 h-5" />
+//             Get Desktop App
+//           </a>
+//         </div>
 
-        {/* <div id="download" className="max-w-3xl p-8 mx-auto glass-prism rounded-3xl animate-fade-in-up animation-delay-400">
-          <p className="mb-6 text-sm tracking-widest uppercase text-stellar-dim">Download for your platform</p>
-          <div className="grid grid-cols-3 gap-4">
-            <a href="#" className="flex items-center gap-3 px-6 py-3 transition-all border group rounded-2xl bg-white/5 hover:bg-white/10 border-white/5 hover:border-aurora-cyan/30">
-              <AppleIcon className="w-8 h-8 transition-colors text-stellar-silver group-hover:text-aurora-cyan" />
-              <span className="text-sm font-medium text-stellar-silver group-hover:text-stellar-white">macOS</span>
-            </a>
-            <a href="#" className="flex items-center gap-3 px-6 py-3 transition-all border group rounded-2xl bg-white/5 hover:bg-white/10 border-white/5 hover:border-aurora-purple/30">
-              <WindowsIcon className="w-8 h-8 transition-colors text-stellar-silver group-hover:text-aurora-purple" />
-              <span className="text-sm font-medium text-stellar-silver group-hover:text-stellar-white">Windows</span>
-            </a>
-            <a href="#" className="flex items-center gap-3 px-6 transition-all border group rounded-2xl bg-white/5 hover:bg-white/10 border-white/5 hover:border-aurora-pink/30">
-              <LinuxIcon className="w-8 h-8 transition-colors text-stellar-silver group-hover:text-aurora-pink" />
-              <span className="text-sm font-medium text-stellar-silver group-hover:text-stellar-white">Linux</span>
-            </a>
-          </div>
-        </div> */}
-      </div>
-    </section>
-  );
-};
+//         {/* <div id="download" className="max-w-3xl p-8 mx-auto glass-prism rounded-3xl animate-fade-in-up animation-delay-400">
+//           <p className="mb-6 text-sm tracking-widest uppercase text-stellar-dim">Download for your platform</p>
+//           <div className="grid grid-cols-3 gap-4">
+//             <a href="#" className="flex items-center gap-3 px-6 py-3 transition-all border group rounded-2xl bg-white/5 hover:bg-white/10 border-white/5 hover:border-aurora-cyan/30">
+//               <AppleIcon className="w-8 h-8 transition-colors text-stellar-silver group-hover:text-aurora-cyan" />
+//               <span className="text-sm font-medium text-stellar-silver group-hover:text-stellar-white">macOS</span>
+//             </a>
+//             <a href="#" className="flex items-center gap-3 px-6 py-3 transition-all border group rounded-2xl bg-white/5 hover:bg-white/10 border-white/5 hover:border-aurora-purple/30">
+//               <WindowsIcon className="w-8 h-8 transition-colors text-stellar-silver group-hover:text-aurora-purple" />
+//               <span className="text-sm font-medium text-stellar-silver group-hover:text-stellar-white">Windows</span>
+//             </a>
+//             <a href="#" className="flex items-center gap-3 px-6 transition-all border group rounded-2xl bg-white/5 hover:bg-white/10 border-white/5 hover:border-aurora-pink/30">
+//               <LinuxIcon className="w-8 h-8 transition-colors text-stellar-silver group-hover:text-aurora-pink" />
+//               <span className="text-sm font-medium text-stellar-silver group-hover:text-stellar-white">Linux</span>
+//             </a>
+//           </div>
+//         </div> */}
+//       </div>
+//     </section>
+//   );
+// };
